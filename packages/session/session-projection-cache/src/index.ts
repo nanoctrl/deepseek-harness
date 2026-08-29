@@ -279,6 +279,21 @@ export class SessionProjectionCache extends Service {
     }
   }
 
+  /**
+   * Drop one session's cached checkpoint row and any pending write-behind
+   * state. Sessions unknown to the cache resolve as a no-op. The session's
+   * log itself is untouched — deletion of artifacts is the caller's concern.
+   */
+  remove(id: SessionId): void {
+    this.requireTable().delete(id)
+    for (const [session, state] of this.dirty) {
+      if (session.id === id) {
+        if (state.timer !== undefined) clearTimeout(state.timer)
+        this.dirty.delete(session)
+      }
+    }
+  }
+
   private requireTable(): KvTable<SessionId, CheckpointRecord> {
     /* v8 ignore next -- Service.init assigns the table before the service becomes injectable */
     if (this.table === undefined) throw new Error('session projection cache is not initialized')

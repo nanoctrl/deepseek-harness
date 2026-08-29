@@ -260,6 +260,23 @@ export class SqliteStore implements PersistenceBackend<number> {
     }))
   }
 
+  /**
+   * Remove one session's rows. The sessions row delete cascade-removes its
+   * events; the store identity and schema are untouched. Unknown ids resolve
+   * without writing.
+   */
+  async remove(id: SessionId): Promise<void> {
+    await this.open()
+    this.db.exec(sql('begin-immediate'))
+    try {
+      validateSchemaForMutation(this.databaseConstructor, this.db, this.databasePath)
+      this.db.prepare(sql('delete-session')).run(id)
+      this.db.exec(sql('commit'))
+    } catch (error: unknown) {
+      this.rollback(error, 'remove')
+    }
+  }
+
   async close(): Promise<void> {
     if (this.ready === undefined) {
       if (this.pathReady !== undefined) await Promise.allSettled([this.pathReady])

@@ -428,5 +428,49 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
         await dispose()
       }
     })
+
+    it('remove() deletes the persisted session while keeping every other session readable', async () => {
+      const { persistence, dispose } = await make()
+      try {
+        const removed = meta('remove-target')
+        const kept = meta('remove-kept')
+        await persistence.create(removed)
+        await persistence.create(kept)
+        await persistence.append(kept.id, [
+          {
+            type: 'user/message',
+            seq: 0,
+            time: 1,
+            data: {
+              id: MessageId('remove-kept-msg'),
+              role: 'user',
+              content: [{ type: 'text', text: 'kept' }],
+              source: { kind: 'user' },
+            },
+            surfaceOp: 'append',
+          },
+        ] as unknown as SessionEvent[])
+
+        await persistence.remove(removed.id)
+
+        const ids = (await persistence.list()).map(header => header.id)
+        expect(ids).not.toContain(removed.id)
+        expect(ids).toContain(kept.id)
+        // The kept session still loads intact after the removal.
+        const inspection = await persistence.load(kept.id)
+        expect(inspection.meta.id).toBe(kept.id)
+      } finally {
+        await dispose()
+      }
+    })
+
+    it('remove() resolves without writing for an unknown session id', async () => {
+      const { persistence, dispose } = await make()
+      try {
+        await persistence.remove(meta('remove-ghost').id)
+      } finally {
+        await dispose()
+      }
+    })
   })
 }

@@ -34,6 +34,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
     /**
+     * The instance-monitor section between the browsing region and the foot.
+     * Declared by this package's 'sidebar' entry; ui-instance-monitor
+     * registers the panel when that plugin is composed.
+     */
+    'sidebar.monitor': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
      * The sidebar passes only its column state — it holds no settings state.
@@ -112,6 +118,7 @@ export type SidebarRootComponentProps =
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
     | 'sidebar.workspaces'
+    | 'sidebar.monitor'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
   >
