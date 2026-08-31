@@ -11,6 +11,7 @@
 
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs'
+import { createConnection } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -39,24 +40,75 @@ export interface Config {
   timeoutMs?: number
 }
 
-/** Run `transcribe.py` on one audio file and return its stdout (the text). */
+/** Strip ANSI escapes (the spinner's colors) and control characters from stderr. */
+function cleanErr(raw: string): string {
+  return raw.replace(/\x1b\[[0-9;]*m/g, '').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+/** Minimal request the liveness probe sends; the missing path fails fast. */
+const PING_AUDIO = '/tmp/__voice-dictation-ping__.wav'
+
+/**
+ * Whether the whisper server is alive, probed with a complete request/response.
+ * A connect-and-drop probe would reach the server's broken-pipe path (its error
+ * reply lands on a closed socket) and kill it, so always finish the exchange.
+ */
+function serverReady(sock: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = createConnection({ path: sock })
+    let settled = false
+    const finish = (live: boolean): void => {
+      if (settled) return
+      settled = true
+      probe.destroy()
+      resolve(live)
+    }
+    probe.once('connect', () => {
+      probe.write(JSON.stringify({ audio_path: PING_AUDIO, language: null }) + '\n')
+      probe.end()
+    })
+    probe.on('data', () => {}) // drain the reply so the socket closes cleanly
+    probe.once('error', () => finish(false))
+    probe.once('close', () => finish(true))
+    const timer = setTimeout(() => finish(false), 5000)
+    timer.unref()
+  })
+}
+
+/**
+ * Run `transcribe.py` on one audio file and return its stdout (the text). On a
+ * server failure `transcribe.py` prints `Error: …` to stderr and exits 0 with an
+ * empty stdout, so surface that hint instead of swallowing it.
+ */
 function transcribeFile(root: string, model: string, language: string, tmpPath: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const py = join(root, 'whisper-env', 'bin', 'python')
     const script = join(root, 'transcribe.py')
+    let stderrBuf = ''
     const child = execFile(py, [script, tmpPath, model, language], { timeout: timeoutMs, encoding: 'utf8' }, (err, stdout) => {
       if (err) { reject(err); return }
-      resolve(stdout)
+      const text = (stdout || '').trim()
+      if (text) { resolve(text); return }
+      const hint = cleanErr(stderrBuf)
+      const at = hint.lastIndexOf('Error:')
+      if (at !== -1) { reject(new Error(hint.slice(at + 'Error:'.length).trim() || hint)); return }
+      // Genuinely empty transcript (silence) — the spinner note is not an error.
+      resolve('')
     })
-    // transcribe.py prints its spinner to stderr; swallow it and keep stdout clean.
-    child.stderr?.on('data', () => {})
+    child.stderr?.on('data', (chunk) => { stderrBuf += String(chunk) })
   })
 }
 
-/** Start (detached) the whisper server and wait until its socket exists. */
+/** Start (detached) the whisper server and wait until its socket answers a probe. */
 async function ensureServer(root: string, model: string, waitMs: number): Promise<void> {
   const sock = `/tmp/whisper-server-${model}.sock`
-  if (existsSync(sock)) return
+  // A stale socket file can outlive its server (the daemon closes after 30 min of
+  // idle), so probe for a live listener — a dead socket must be restarted, not
+  // treated as ready.
+  if (await serverReady(sock)) return
+  // Clear a stale socket before starting; the waiter below must not see a dead
+  // file as readiness (the daemon unbinds and recreates it after loading).
+  try { if (existsSync(sock)) unlinkSync(sock) } catch { /* best-effort */ }
   const py = join(root, 'whisper-env', 'bin', 'python')
   const server = join(root, 'whisper-server.py')
   try {
@@ -66,7 +118,8 @@ async function ensureServer(root: string, model: string, waitMs: number): Promis
   }
   const deadline = Date.now() + waitMs
   while (Date.now() < deadline) {
-    if (existsSync(sock)) return
+    // Wait for the socket file (readiness), then confirm with a real probe.
+    if (existsSync(sock) && await serverReady(sock)) return
     await new Promise(resolve => setTimeout(resolve, 500))
   }
 }

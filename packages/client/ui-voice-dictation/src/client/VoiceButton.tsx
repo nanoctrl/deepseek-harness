@@ -2,10 +2,10 @@
  * Voice dictation mic button in the composer.
  *
  * Click (or Ctrl+M) starts recording; a red circle slides to screen center and
- * grows with the voice. Enter (or a click on the circle) stops and transcribes
- * via the host `voiceTranscribe` Remote, showing an estimated 0→100% progress.
- * On success the text is inserted in the composer and the caret is placed at
- * the end so Enter sends it.
+ * grows with the voice. A double clap or double snap, Enter, or a click on the
+ * circle stops and transcribes via the host `voiceTranscribe` Remote, showing
+ * an estimated 0→100% progress. On success the text is inserted in the composer
+ * and the caret is placed at the end so Enter sends it.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
@@ -42,6 +42,27 @@ interface RecorderHolder {
 }
 
 const SHORTCUT = { ctrl: true, shift: false, alt: false, key: 'm' }
+
+// Disparo de fin de grabación por doble transitorio (dos palmadas o dos
+// chasquidos). Una palmada satura/recorta la señal (pico alto en el dominio del
+// tiempo); un chasquido es más corto, agudo y silencioso, y concentra su energía
+// en la banda alta del espectro. Ambos comparten un ataque muy rápido, a
+// diferencia del habla que crece de forma gradual.
+const CLAP_MIN_PEAK = 0.8        // piso de pico: la palmada recorta la señal
+const CLAP_ATTACK_PEAK = 0.25    // salto de pico entre frames (ataque rápido)
+// Banda alta calibrada sobre chasquidos reales (FFT 512, ~48 kHz): pico ~2.4 kHz,
+// energía hasta ~13 kHz. Captura ~82% de la energía del chasquido y excluye el
+// grave (<1.8 kHz) donde vive la voz hablada.
+const SNAP_BIN_LO = 0.08         // arranque de la banda alta (≈1.8 kHz)
+const SNAP_BIN_HI = 0.60         // fin de la banda alta (≈13 kHz)
+const SNAP_MIN_HI = 0.20         // piso de pico espectral (sobre el silencio ~0.05)
+const SNAP_ATTACK_HI = 0.20      // salto de pico espectral entre frames (ataque ~1 frame)
+const SNAP_DECAY_RATIO = 0.4     // confirmar chasquido solo si el pico cae bajo ~40%
+const SNAP_MAX_DURATION_MS = 50  // ventana de decaimiento: "s"/"ch" sostienen el agudo más tiempo
+const CLAP_MIN_RECORD_MS = 900   // ignorar el arranque de la grabación
+const CLAP_REFRACTORY_MS = 150   // no contar rebotes del mismo pico
+const CLAP_WINDOW_MIN_MS = 180   // separación mínima entre los dos transitorios
+const CLAP_WINDOW_MAX_MS = 700   // separación máxima entre los dos transitorios
 
 function matchesShortcut(event: KeyboardEvent): boolean {
   return event.ctrlKey === SHORTCUT.ctrl
@@ -225,12 +246,20 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const node = circleRef.current
     if (!h || !h.analyser || !node) return
     const data = new Uint8Array(h.analyser.fftSize)
+    const freq = new Uint8Array(h.analyser.frequencyBinCount)
     let phase = 0
     let raf = 0
+    let prevPeak = 0
+    let prevHi = 0
+    let pendingSnapAt = -Infinity
+    let pendingSnapHi = 0
+    let lastClapAt = -Infinity
+    let lastTransientAt = -Infinity
     const tick = (): void => {
       // Colores: rotación lenta (~15s por ciclo) para transición gradual.
       phase = (phase + 0.4) % 360
       h.analyser?.getByteTimeDomainData(data)
+      h.analyser?.getByteFrequencyData(freq)
       let sum = 0
       let peak = 0
       for (let i = 0; i < data.length; i++) {
@@ -239,8 +268,49 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
         const a = v < 0 ? -v : v
         if (a > peak) peak = a
       }
+      // Pico espectral de la banda alta (chasquidos; las vocales quedan bajas).
+      const lo = Math.floor(freq.length * SNAP_BIN_LO)
+      const hiEnd = Math.floor(freq.length * SNAP_BIN_HI)
+      let hiPeak = 0
+      for (let i = lo; i < hiEnd; i++) { const v = freq[i] ?? 0; if (v > hiPeak) hiPeak = v }
+      const hi = hiPeak / 255
       const rms = Math.sqrt(sum / data.length)
       const level = Math.min(1, rms * 2.5 + peak * 1.4)
+      // Doble transitorio (palmada por pico, o chasquido por banda alta): dos
+      // ataques rápidos seguidos terminan la grabación.
+      const now = Date.now()
+      const clapHit = peak > CLAP_MIN_PEAK && peak - prevPeak > CLAP_ATTACK_PEAK
+      // Chasquido: ataque rápido en banda alta, confirmado solo si el pico decae
+      // rápido. Un chasquido dura 5-16 ms; una "s"/"ch" sostiene el agudo decenas
+      // de ms, así que el decaimiento lento (o nulo) lo descarta.
+      let snapHit = false
+      if (pendingSnapAt !== -Infinity) {
+        pendingSnapHi = Math.max(pendingSnapHi, hi)
+        const elapsed = now - pendingSnapAt
+        if (hi < pendingSnapHi * SNAP_DECAY_RATIO) {
+          snapHit = elapsed <= SNAP_MAX_DURATION_MS
+          pendingSnapAt = -Infinity
+        } else if (elapsed > SNAP_MAX_DURATION_MS) {
+          pendingSnapAt = -Infinity
+        }
+      }
+      if (pendingSnapAt === -Infinity && hi > SNAP_MIN_HI && hi - prevHi > SNAP_ATTACK_HI) {
+        pendingSnapAt = now
+        pendingSnapHi = hi
+      }
+      if ((clapHit || snapHit)
+          && now - h.recordStart >= CLAP_MIN_RECORD_MS
+          && now - lastTransientAt >= CLAP_REFRACTORY_MS) {
+        lastTransientAt = now
+        if (now - lastClapAt >= CLAP_WINDOW_MIN_MS && now - lastClapAt <= CLAP_WINDOW_MAX_MS) {
+          cancelAnimationFrame(raf)
+          stop()
+          return
+        }
+        lastClapAt = now
+      }
+      prevPeak = peak
+      prevHi = hi
       const scale = 1 + level * 0.85
       const spread = Math.round(level * 45)
       node.style.transform = 'scale(' + scale.toFixed(3) + ')'
@@ -300,7 +370,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     + (status === 'error' ? ' ' + css.error : '')
     + (hidden ? ' ' + css.hidden : '')
   const title = status === 'recording'
-    ? 'Grabando — Ctrl+M / Enter o clic para detener'
+    ? 'Grabando — doble palmada o chasquido, Ctrl+M, Enter o clic para detener'
     : status === 'transcribing'
       ? 'Transcribiendo…'
       : (status === 'error' ? (err || 'Reintentar dictado') : 'Dictado por voz (Ctrl+M)')
