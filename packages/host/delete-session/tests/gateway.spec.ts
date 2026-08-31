@@ -38,17 +38,23 @@ async function harness(sessionRoot: string) {
   ctx.storage.mount('domain', facility)
   ctx.provide('storageDomain', facility)
 
-  // Sessions stub: the gateway (and registry) probe liveness via get(id);
-  // the persistence coordinator seeds write-path state from list(), and the
-  // registry's live index maps list() entries through `.header`.
+  // Sessions stub: the registry's live index maps list() entries through
+  // `.header`; the gateway no longer consults it for the running guard.
   const live = new Map<string, { header: unknown }>()
   ctx.provide('sessions', {
     get: (id: SessionId) => live.get(String(id)),
     list: () => [...live.values()],
   } as never)
 
+  // Agents stub: the gateway guards on an active driver's status.
+  const running = new Map<string, { status: 'idle' | 'running' }>()
+  ctx.provide('agents', {
+    get: (id: SessionId) => running.get(String(id)),
+    list: () => [...running.values()],
+  } as never)
+
   await ctx.plugin(JsonlSessionPersistence, { root: sessionRoot, compression: 'none' })
-  return { ctx, pool, live }
+  return { ctx, pool, live, running }
 }
 
 describe('DeleteSessionGateway integration', () => {
@@ -89,7 +95,7 @@ describe('DeleteSessionGateway integration', () => {
     await h.ctx.sessionPersistence.append(id as SessionId, [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
     ] as never)
-    h.live.set(id, { header: { version: 0, id: id as SessionId, createdAt: Date.now(), cwd } })
+    h.running.set(id, { status: 'running' })
     await h.ctx.plugin(WorkspaceRegistry)
     const gateway = new DeleteSessionGateway(h.ctx)
 

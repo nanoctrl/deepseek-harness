@@ -23,7 +23,7 @@ export type * from './types.ts'
 export class DeleteSessionLiveError extends Error {
   constructor(readonly sessionId: string) {
     super(
-      `cannot delete session '${sessionId}': the session is live — archive it and close it first`,
+      `cannot delete session '${sessionId}': the session is running — wait for it to finish before deleting`,
     )
     this.name = 'DeleteSessionLiveError'
   }
@@ -56,10 +56,12 @@ export class DeleteSessionGateway extends TypertRemoteService {
     }
     const id = sessionId as SessionId
 
-    // 1. Refuse live sessions: the harness writes their logs; deleting under
-    //    it would corrupt the running session and its open handles.
-    const sessions = this.ctx.get('sessions') as { get(id: SessionId): unknown } | undefined
-    if (sessions?.get(id) !== undefined) throw new DeleteSessionLiveError(sessionId)
+    // 1. Refuse running sessions: a driver is actively writing the log, so
+    //    deleting under it would corrupt the session. An idle session stays in
+    //    the store until navigated away, so store presence is not the refusal
+    //    condition — only an active driver is.
+    const agents = this.ctx.get('agents') as { get(id: SessionId): { status: 'idle' | 'running' } | undefined } | undefined
+    if (agents?.get(id)?.status === 'running') throw new DeleteSessionLiveError(sessionId)
 
     // 2. Ground truth: the session must exist in persistence.
     const persistence = this.ctx.get('sessionPersistence') as SessionPersistence | undefined
