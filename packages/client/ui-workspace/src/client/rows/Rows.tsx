@@ -6,6 +6,7 @@
  * and workspace hover cards are suppressed while a menu is open.
  */
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconArchiveOutline20, IconBranchOutline16, IconEditOutline16,
@@ -14,7 +15,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-client-runtime/client'
-import type { WorkspaceBrowserProps } from '../contract/slots.ts'
+import type { SessionActionOwnerProps, WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import { relativeTime } from '../tree.ts'
 import css from './Rows.module.css'
@@ -357,7 +358,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
  * @returns the session row.
  */
 export function SessionNodeItem({
-  node, currentId, now, onOpen, onRename, onFork, onArchive, drag, flat = false, t,
+  node, currentId, now, onOpen, onRename, onFork, onArchive, renderSessionActions, drag, flat = false, t,
 }: {
   node: SessionNode
   currentId: string | undefined
@@ -369,6 +370,8 @@ export function SessionNodeItem({
   onFork: (id: SessionNode['id']) => void
   /** Archive this session (row menu action; commits without a dialog). */
   onArchive: (id: SessionNode['id']) => void
+  /** Render slot-provided session actions pinned in the row menu footer. */
+  renderSessionActions?: ((owner: SessionActionOwnerProps) => ReactNode) | undefined
   /** Present only on draggable rows (workspace-group sessions outside search). */
   drag?: RowDragProps | undefined
   /** The row is rendered without a parent Workspace header. */
@@ -446,6 +449,13 @@ export function SessionNodeItem({
             open={menuOpen}
             onClose={() => { setMenuOpen(false) }}
             items={sessionMenuItems}
+            footerNode={renderSessionActions === undefined || row.blank
+              ? undefined
+              : renderSessionActions({
+                sessionId: node.id,
+                title,
+                onClose: () => { setMenuOpen(false) },
+              })}
             onSelect={(id) => {
               setMenuOpen(false)
               if (id === 'rename') onRename(node.id, row.title)

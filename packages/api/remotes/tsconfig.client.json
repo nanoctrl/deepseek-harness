@@ -40,6 +40,9 @@
       "path": "../../feedback/message-feedback"
     },
     {
+      "path": "../../host/delete-session"
+    },
+    {
       "path": "../../host/plugin-inventory"
     },
     {

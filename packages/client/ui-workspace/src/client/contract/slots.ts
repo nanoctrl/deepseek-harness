@@ -57,7 +57,23 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /**
+     * Optional actions rendered in the session row menu footer (declared by
+     * the WorkspaceBrowser entry; a composed package registers its action
+     * row, e.g. a destructive "delete session" item).
+     */
+    'sidebar.workspaces.sessionAction': { kind: 'list'; scope: 'root'; owner: SessionActionOwnerProps }
   }
+}
+
+/** Owner share of one session row's action-menu footer. */
+export interface SessionActionOwnerProps {
+  /** The session the action targets. */
+  sessionId: SessionId
+  /** The row title (displayed in confirm copy). */
+  title: string
+  /** Close the row menu after the action completes. */
+  onClose: () => void
 }
 
 /** The two directory-flow holes; a flow package's client half registers its one component into both. */
@@ -142,7 +158,7 @@ export type WorkspaceBrowserInjected = {
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */
 export type WorkspaceBrowserProps =
   PropsRuntime<'sidebar.workspaces'>
-  & PropsRenderSlots<'sidebar.workspaces.directoryFlow'>
+  & PropsRenderSlots<'sidebar.workspaces.directoryFlow' | 'sidebar.workspaces.sessionAction'>
   & PropsStore<ReturnType<typeof createWorkspaceViewStore>>
   & Omit<WorkspaceBrowserInjected, 'hooks'>
   & PropsHooks<WorkspaceBrowserInjected['hooks']>

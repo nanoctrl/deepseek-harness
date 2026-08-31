@@ -5,6 +5,7 @@ import commandsRemote from '@deepseek-ai/dsh-commands/remote'
 import goalsRemote from '@deepseek-ai/dsh-goal/remote'
 import dynamicRemote from '@deepseek-ai/dsh-cordis-host-runner/remote'
 import fileReferencesRemote from '@deepseek-ai/dsh-file-reference/remote'
+import deleteSessionRemote from '@deepseek-ai/dsh-host-delete-session/remote'
 import pluginInventoryRemote from '@deepseek-ai/dsh-host-plugin-inventory/remote'
 import instanceMonitorRemote from '@deepseek-ai/dsh-host-instance-monitor/remote'
 import voiceTranscribeRemote from '@deepseek-ai/dsh-host-voice-dictation/remote'
@@ -13,11 +14,13 @@ import sessionReferencesRemote from '@deepseek-ai/dsh-session-reference/remote'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 
 export type { TypertClientRemote as ClientRemote } from '@deepseek-ai/dsh-typert-protocol'
+export type { DeleteSessionInput, DeleteSessionResult } from '@deepseek-ai/dsh-host-delete-session/types'
 export type { PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inventory/types'
 export type { InstanceMonitorSnapshot, InstanceAction, InstanceActionResult } from '@deepseek-ai/dsh-host-instance-monitor/types'
 export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-file-reference/remote'
 export type {} from '@deepseek-ai/dsh-goal/remote'
+export type {} from '@deepseek-ai/dsh-host-delete-session/remote'
 export type {} from '@deepseek-ai/dsh-host-plugin-inventory/remote'
 export type {} from '@deepseek-ai/dsh-host-instance-monitor/remote'
 export type {} from '@deepseek-ai/dsh-host-voice-dictation/remote'
@@ -121,7 +124,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
   try {
     for (const contribution of [
       commandsRemote, goalsRemote, dynamicRemote, fileReferencesRemote,
-      pluginInventoryRemote, instanceMonitorRemote,
+      deleteSessionRemote, pluginInventoryRemote, instanceMonitorRemote,
       voiceTranscribeRemote, messageFeedbackRemote, sessionReferencesRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
