@@ -48,16 +48,53 @@ Reglas de resolución:
 - `pnpm-lock.yaml` conflictivo: resolver a mano o regenerar con `pnpm install` tras el merge.
 - Al terminar: `git add <archivos>` y `git commit` (completa el merge).
 
-## Verificar después del merge
+## Analizar qué puede romper tu trabajo
 
-El merge mezcla 1313+ commits de upstream con trabajo local; verificar que el conjunto compile y pase sus tests antes de pushear:
+Un merge que resuelve conflictos **no garantiza que tu trabajo siga funcionando**: upstream puede haber eliminado, renombrado o cambiado la API de algo de lo que tu fork depende. Antes de dar el merge por terminado, hacer este análisis.
+
+1. **Detectar breaking changes de upstream** (en el rango que traés):
 
 ```sh
-pnpm run build              # typecheck + bundle
-pnpm run test:gui           # suites del cliente + host GUI (inner loop)
+git log --oneline master..origin/master | grep -iE 'remove|rename|delete|refactor|break|deprecat'
+git diff --stat master origin/master | grep -iE 'delete|rename'
 ```
 
-Si algo falla, corregirlo antes de pushear. No pushear esperando que CI lo arregle.
+Los commits `type(scope)!:` (conventional commits) y las palabras `remove`/`rename`/`delete` señalan que algo dejó de existir o cambió de nombre.
+
+2. **Cruzar con lo que tu fork depende.** Listar los paquetes propios del fork (los que no existen en upstream) y, para cada uno, confirmar que sus dependencias de upstream siguen vivas:
+
+```sh
+# paquetes que tu trabajo local agrega (ausentes en upstream)
+git diff --name-only master origin/master --diff-filter=A -- 'packages/*/*/package.json'
+# imports de un paquete propio hacia otros @deepseek-ai/dsh-* (revisar que sigan existiendo)
+grep -rho "@deepseek-ai/dsh-[a-z0-9-]*" packages/<grupo>/<tu-paquete>/src | sort -u
+```
+
+3. **Los conflictos `modify/delete` son la señal crítica.** Significan que upstream **eliminó o renombró** un archivo que tu fork **modificó**. No se resuelven "uniendo líneas": hay que **portar** la feature a la estructura nueva de upstream, o descartarla. Ejemplo real de este fork: `delete-session` agregaba SQL a `session-persistence-sqlite`, y upstream eliminó ese backend (`refactor(session)!: remove SQLite persistence backend`) — la feature hay que reimplementarla sobre el backend nuevo (`jsonl`), no mergearla.
+
+4. **Decisión explícita por feature afectada.** Para cada paquete propio cuyo soporte de upstream cambió, elegir y anotar en el mensaje del merge commit:
+   - **Portar**: reimplementar la feature sobre la API/backend nuevo de upstream.
+   - **Descartar**: si upstream ya cubre la feature, quitar la versión local.
+   - **Aislar**: si la versión local es independiente, dejarla tal cual.
+
+## Verificar después del merge
+
+Con los conflictos resueltos, verificar que el conjunto compile y pase sus tests antes de pushear:
+
+```sh
+pnpm install               # regenerar el lock si el merge tocó dependencias
+pnpm run typecheck         # delata imports rotos (paquetes que upstream borró/renombró)
+pnpm run build             # tsc + bundle de todas las caras
+pnpm run test:gui          # suites del cliente + host GUI (inner loop)
+```
+
+Confirmar además que cada paquete propio del fork siga presente y su feature funcione:
+
+```sh
+ls packages/host/instance-monitor packages/host/delete-session packages/host/voice-dictation packages/client/ui-voice-dictation
+```
+
+Si algo falla o un paquete propio desapareció, corregirlo antes de pushear. No pushear esperando que CI lo arregle.
 
 ## Push al fork
 
