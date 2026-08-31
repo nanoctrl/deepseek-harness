@@ -294,6 +294,21 @@ export class SessionProjectionCache extends Service {
     }
   }
 
+  /**
+   * Drop one session's cached checkpoint row and any pending write-behind
+   * state. Sessions unknown to the cache resolve as a no-op. The session's
+   * log itself is untouched — deletion of artifacts is the caller's concern.
+   */
+  remove(id: SessionId): void {
+    this.requireTable().delete(id)
+    for (const [session, state] of this.dirty) {
+      if (session.id === id) {
+        if (state.timer !== undefined) clearTimeout(state.timer)
+        this.dirty.delete(session)
+      }
+    }
+  }
+
   /** Replace one session's stored record with its log identity and a detached snapshot of `rows`. */
   private async put(id: SessionId, identity: CheckpointIdentity, rows: ProjectionCheckpoint): Promise<void> {
     const detached = snapshotJsonValue(rows)

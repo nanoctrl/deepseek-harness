@@ -77,11 +77,13 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * by a hairline; they stay visible while the items above scroll.
  * @returns anchor wrapper with the conditional list.
  */
-export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, footer, className }: {
+export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, onClose, align = 'start', side = 'bottom', portal = false, closeOnPointerLeave = false, dense = false, compact = false, getAnchorRect, footer, footerNode, className }: {
   open: boolean
   anchor: ReactNode
   items: readonly MenuEntry[]
   footer?: readonly MenuEntry[]
+  /** Arbitrary node pinned below the scrolling items area beside `footer` entries. */
+  footerNode?: ReactNode
   selectedId?: string | undefined
   selectedIds?: readonly string[] | undefined
   onSelect: (id: string) => void
@@ -266,9 +268,10 @@ export function Menu({ open, anchor, items, selectedId, selectedIds, onSelect, o
       <div className={css.viewport} role="presentation">
         {items.map(renderEntry)}
       </div>
-      {footer !== undefined && footer.length > 0 && (
+      {((footer !== undefined && footer.length > 0) || footerNode !== undefined) && (
         <div className={css.footer} role="presentation">
-          {footer.map(renderEntry)}
+          {footer !== undefined && footer.length > 0 && footer.map(renderEntry)}
+          {footerNode}
         </div>
       )}
     </div>

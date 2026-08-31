@@ -280,6 +280,20 @@ export abstract class SessionPersistence extends Service {
    * @returns one header and opaque revision per materialized session without loading full logs.
    */
   abstract listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]>
+
+  /**
+   * Remove one session's persisted artifacts (log files, checkpoints, and any
+   * sidecar state) from disk. The session must not be live; callers guard
+   * against live sessions before invoking this.
+   *
+   * The default implementation refuses: removal is storage-specific, and a
+   * provider that cannot delete logs must fail loudly rather than pretend.
+   * @param id - the session whose artifacts to remove.
+   * @param signal - optional cancellation for backend removal work.
+   */
+  remove(_id: SessionId, _signal?: AbortSignal): Promise<void> {
+    return Promise.reject(new Error('session persistence provider does not support session removal'))
+  }
 }
 
 export default SessionPersistence

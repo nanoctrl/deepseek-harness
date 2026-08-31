@@ -209,6 +209,31 @@ describe('deriveGroups', () => {
       sessions, [workspace('first', ['parent', 'fork'])], 'parent', noArchive,
       noAttention, { items: [], hasMore: false }, 10,
     ).items[0]).toMatchObject({ id: parent.id, runningSubagentCount: 2 })
+    expect(groups[0]!.hasActivity).toBe(true)
+  })
+
+  it('marks a group active while any member runs, even collapsed, and idle otherwise', () => {
+    const running = { ...summary('running', 1), running: true }
+    const idle = summary('idle', 2)
+    const active = deriveGroups(
+      list(running, idle), [workspace('first', ['running', 'idle'])], noArchive, noAttention, view(),
+    )
+    expect(active[0]!.hasActivity).toBe(true)
+    // Collapsed groups fold their rows but still derive activity from members.
+    expect(active[0]!.sessions).toEqual([])
+
+    const descendant = summary('owner', 1)
+    const child = { ...summary('child', 2), parentId: descendant.id, origin: 'subagent' as const, running: true }
+    const delegated = deriveGroups(
+      { ...list(descendant, child), current: child.id },
+      [workspace('first', ['owner', 'child'])], noArchive, noAttention, view(),
+    )
+    expect(delegated[0]!.hasActivity).toBe(true)
+
+    const quiet = deriveGroups(list(idle), [workspace('first', ['idle'])], noArchive, noAttention, view())
+    expect(quiet[0]!.hasActivity).toBe(false)
+    const empty = deriveGroups(list(), [workspace('empty', [])], noArchive, noAttention, view())
+    expect(empty[0]!.hasActivity).toBe(false)
   })
 
   it('ignores fork lineage and sorts every ungrouped session as a top-level row', () => {

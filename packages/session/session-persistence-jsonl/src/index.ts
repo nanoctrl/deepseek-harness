@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { readdirSync } from 'node:fs'
 import { open, mkdir, readFile, readdir, realpath, link, rm, stat, truncate } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
 import { randomBytes } from 'node:crypto'
@@ -483,6 +483,25 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     }
     signal?.throwIfAborted()
     return snapshots
+  }
+
+  override async remove(id: SessionId, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
+    await this.ensureRootEncoding()
+    signal?.throwIfAborted()
+    const path = await this.findLog(id, signal)
+    if (path === undefined) return
+    const dir = dirname(path)
+    if (basename(dir) === encodeSegment(id)) {
+      await rm(dir, { recursive: true, force: true })
+      // Prune the now-empty project folder (the workspace-encoded directory).
+      const project = dirname(dir)
+      const siblings = await readdir(project).catch(() => [] as string[])
+      if (siblings.length === 0) await rm(project, { recursive: true, force: true })
+    } else {
+      // Defensive: a log outside the per-session directory removes only itself.
+      await rm(path, { force: true })
+    }
   }
 
   private async listArtifacts(signal?: AbortSignal): Promise<Array<{ header: SessionHeader; path: string }>> {

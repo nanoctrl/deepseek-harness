@@ -255,6 +255,45 @@ export class WorkspaceRegistry extends Service {
   }
 
   /**
+   * Remove one session from the durable registry: drop it from every
+   * workspace's `sessionIds` account and from the archive set. The session's
+   * persisted artifacts are NOT touched here — deleting those is the caller's
+   * concern (session persistence). Sessions unknown to the registry resolve
+   * as a no-op.
+   * @param sessionId - The session to forget.
+   * @returns `true` when the session was accounted somewhere and a durable write happened.
+   */
+  removeSession(sessionId: SessionId): Promise<boolean> {
+    return this.enqueueOperation(async () => {
+      const table = this.requireTable()
+      const state = this.requireState()
+      const holders = [...table.entries()]
+        .filter(([, record]) => record.sessionIds.includes(sessionId))
+        .map(([id]) => id)
+      for (const id of holders) {
+        await table.update(id, record => ({
+          ...record,
+          sessionIds: record.sessionIds.filter(sid => sid !== sessionId),
+          updatedAt: new Date().toISOString(),
+        }))
+      }
+      let archived = false
+      if (state.archivedSessionIds.includes(sessionId)) {
+        archived = true
+        await this.setState({
+          ...state,
+          archivedSessionIds: state.archivedSessionIds.filter(sid => sid !== sessionId),
+        })
+      }
+      // Drop the path caches and re-sync entity snapshots with the records.
+      this.sessionPaths.delete(sessionId)
+      this.invalidSessionPaths.delete(sessionId)
+      if (holders.length > 0 || archived) this.rebuildEntities()
+      return holders.length > 0 || archived
+    })
+  }
+
+  /**
    * Whether a session is live, header-indexed, or present in a fresh
    * persistence listing. Only a definite miss returns false — a failing
    * `sessionPersistence.list()` propagates so storage faults never

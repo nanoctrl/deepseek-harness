@@ -108,6 +108,26 @@
     - id: web-startup
       name: '@deepseek-ai/dsh-web-app/startup'
 
+    # Localhost DSH instance monitor: scans loopback ports for served DSH
+    # instances and hosts the instanceMonitor Remote the sidebar panel reads.
+    # selfPort pins this instance so the stop/restart actions never target it.
+    - id: instance-monitor
+      name: '@deepseek-ai/dsh-host-instance-monitor'
+      inject: [webStartup]
+      config:
+        selfPort: !!js ctx.webStartup.port ?? 3080
+
+    # Voice dictation STT: hosts the voiceTranscribe Remote the composer mic
+    # reads; transcribes via the claude-voice whisper-server.
+    - id: voice-dictation
+      name: '@deepseek-ai/dsh-host-voice-dictation'
+
+    # Permanent session deletion: hosts the deleteSession Remote the session
+    # row menu footer action calls. Refuses live sessions — the operator
+    # archives and closes a session before deleting it.
+    - id: delete-session
+      name: '@deepseek-ai/dsh-host-delete-session'
+
     # ── layer 2: transport/service ──────────────────────────────────────────────
 
     # Plain route-registration carrier; host and port come from the app's
@@ -268,6 +288,20 @@
     # Background jobs: the session-header list over the jobsBySession mirror.
     - id: ui-jobs
       name: '@deepseek-ai/dsh-client-ui-jobs'
+
+    # Instance monitor: the sidebar panel over the instanceMonitor Remote.
+    - id: ui-instance-monitor
+      name: '@deepseek-ai/dsh-client-ui-instance-monitor'
+
+    # Voice dictation: the composer mic button with the centered recording
+    # overlay and progress, over the voiceTranscribe Remote.
+    - id: ui-voice-dictation
+      name: '@deepseek-ai/dsh-client-ui-voice-dictation'
+
+    # Session-row delete action: the destructive menu footer row over the
+    # deleteSession Remote.
+    - id: ui-delete-session
+      name: '@deepseek-ai/dsh-client-ui-delete-session'
 
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal

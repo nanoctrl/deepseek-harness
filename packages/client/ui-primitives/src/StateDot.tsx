@@ -1,13 +1,31 @@
+// StateDot: session state indicator (figma nodes 14:3303/3305/3312, 122:9182).
+// done/warning/error: 10x10 halo (same color, 10% opacity) around a 6x6 solid
+// core. ongoing: a ring of 8 lights chasing clockwise around a soft glowing
+// core. Colors resolve through --dsw-* tokens only.
+
 import clsx from 'clsx'
 import css from './StateDot.module.css'
 
-/** Four-color state semantic (green done / amber user-attention / blue running ring / red error). */
+/** Four-color state semantic (green done / amber user-attention / fuchsia running ring / red error). */
 export type StateDotState = 'done' | 'warning' | 'ongoing' | 'error'
 
-/** Outer 3x3 matrix cells (2px pixels on a 10px grid), clockwise from top-left. */
-const MATRIX_CELLS: readonly (readonly [number, number])[] = [
-  [0, 0], [4, 0], [8, 0], [8, 4], [8, 8], [4, 8], [0, 8], [0, 4],
-]
+/** Number of lights in the ongoing orbit. */
+const ORBIT_COUNT = 8
+
+/** Orbit radius and per-light radius on the 10-unit viewBox grid. */
+const ORBIT_RADIUS = 3.2
+const LIGHT_RADIUS = 1.25
+
+/** Clockwise orbit positions from the top (12 o'clock), rounded for clean attrs. */
+const ORBIT_LIGHTS: readonly (readonly [number, number])[] = Array.from(
+  { length: ORBIT_COUNT },
+  (_, index) => {
+    const angle = -Math.PI / 2 + (index * 2 * Math.PI) / ORBIT_COUNT
+    const cx = Number((5 + ORBIT_RADIUS * Math.cos(angle)).toFixed(2))
+    const cy = Number((5 + ORBIT_RADIUS * Math.sin(angle)).toFixed(2))
+    return [cx, cy] as const
+  },
+)
 
 /**
  * Render a state dot.
@@ -24,24 +42,23 @@ export function StateDot({ state, size = 10, className }: {
   if (state === 'ongoing') {
     return (
       <svg
-        className={clsx(css.matrix, className)}
+        className={clsx(css.ring, className)}
         data-state="ongoing"
         width={size}
         height={size}
         viewBox="0 0 10 10"
-        shapeRendering="crispEdges"
         aria-hidden="true"
       >
-        {MATRIX_CELLS.map(([x, y], index) => (
-          <rect
-            key={`${x}-${y}`}
-            className={css.cell}
-            x={x}
-            y={y}
-            width="2"
-            height="2"
-            /* Negative delay phases the chase so every cell animates from mount. */
-            style={{ animationDelay: `${(index - MATRIX_CELLS.length) * 125}ms` }}
+        <circle className={css.core} cx="5" cy="5" r="4" />
+        {ORBIT_LIGHTS.map(([cx, cy], index) => (
+          <circle
+            key={`${cx}-${cy}`}
+            className={css.light}
+            cx={cx}
+            cy={cy}
+            r={LIGHT_RADIUS}
+            /* Negative delay phases the chase so every light animates from mount. */
+            style={{ animationDelay: `${(index - ORBIT_COUNT) * 125}ms` }}
           />
         ))}
       </svg>
