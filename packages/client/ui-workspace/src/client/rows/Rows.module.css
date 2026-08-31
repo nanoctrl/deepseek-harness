@@ -148,6 +148,17 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
+/* Activity: the folder itself blinks in the activity color while any session runs. */
+.folderRunning {
+  color: var(--dsw-alias-state-ongoing-primary);
+  animation: folder-activity 1.2s ease-in-out infinite;
+}
+
+@keyframes folder-activity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 
 /* Project leading slot: folder by default, expand arrow on row hover. */
 .projectRow .chevron { display: none; }
@@ -349,7 +360,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sessionRow,
-  .arrow {
+  .arrow,
+  .folderRunning {
     animation: none;
     transition: none;
   }

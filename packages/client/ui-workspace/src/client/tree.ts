@@ -50,6 +50,8 @@ export interface GroupNode {
   expanded: boolean
   /** The group contains the selected session (active folder tint; supplied here so the renderer never scans). */
   containsCurrent: boolean
+  /** True while any visible session in the group runs (own or descendant activity). */
+  hasActivity: boolean
   /** Visible session rows (empty while the group is folded). */
   sessions: readonly SessionNode[]
 }
@@ -227,6 +229,14 @@ function sessionNode(
   }
 }
 
+/** A group is active while any visible member runs itself or a subagent descendant. */
+function groupHasActivity(
+  members: readonly SessionSummary[],
+  descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+): boolean {
+  return members.some(member => member.running || (descendants.get(member.id)?.runningCount ?? 0) > 0)
+}
+
 /**
  * Derive the workspace browser groups with every session as a top-level row.
  *
@@ -266,6 +276,7 @@ export function deriveGroups(
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,
+      hasActivity: groupHasActivity(g.sessions, descendants),
       sessions: expanded ? g.sessions.map(session => sessionNode(session, descendants)) : [],
     })
   }

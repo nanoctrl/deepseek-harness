@@ -147,7 +147,7 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
         }}
       onDragEnd={drag?.end}
     >
-      <span className={clsx(css.slot, css.folder, active && css.folderActive)}>
+      <span className={clsx(css.slot, css.folder, active && css.folderActive, row.hasActivity && css.folderRunning)}>
         {row.expanded ? <IconFolderOpen16 /> : <IconFolderClose16 />}
       </span>
       <span className={clsx(css.slot, css.chevron)}>
@@ -273,7 +273,7 @@ function sessionStatuses(
 function SessionStatusDots({ statuses }: { statuses: readonly [SessionStatus, ...SessionStatus[]] }) {
   return (
     <>
-      <StateDot state={statuses[0].state} />
+      <StateDot state={statuses[0].state} size={12} />
       {statuses.map(status => (
         <span className={css.visuallyHidden} key={status.label}>{status.label}</span>
       ))}
@@ -292,7 +292,7 @@ function SessionHoverContent({ node, now, t }: { node: SessionNode; now: number;
       {!node.blank && <div className={css.hoverTime}>{hoverTimeLabel(node.updatedAt, now, t)}</div>}
       {statuses.map(status => (
         <div className={css.hoverStatus} key={status.label}>
-          <StateDot state={status.state} />
+          <StateDot state={status.state} size={12} />
           <span>{status.label}</span>
         </div>
       ))}
@@ -318,7 +318,6 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
 }) {
   const selected = result.id === currentId
   const statuses = sessionStatuses(result, t)
-  const primaryStatus = statuses[0]
   return (
     <button
       type="button"
@@ -329,9 +328,7 @@ export function SearchResultItem({ result, currentId, onOpen, t }: {
     >
       <span className={css.searchResultHeading}>
         <span className={css.slot}>
-          {(primaryStatus.state !== 'done' || result.completed) && (
-            <SessionStatusDots statuses={statuses} />
-          )}
+          <SessionStatusDots statuses={statuses} />
         </span>
         <span className={css.searchResultTitle}>{result.title}</span>
       </span>
@@ -385,8 +382,8 @@ export function SessionNodeItem({
   const title = displayTitle(node, t)
   const selected = node.id === currentId
   const statuses = sessionStatuses(node, t)
-  const primaryStatus = statuses[0]
-  const showStatus = primaryStatus.state !== 'done' || row.completed
+  // Every session shows its state dot; only the provisional blank row omits it.
+  const showStatus = !row.blank
   const [menuOpen, setMenuOpen] = useState(false)
   // Archive hides the row through the registry-global archive set and never
   // touches the session log, so it is not styled as destructive and needs no
@@ -433,9 +430,8 @@ export function SessionNodeItem({
           drag.drop(rowHalf(e))
         }}
     >
-      {/* Pending interaction and own or descendant activity outrank the
-          finished-but-unviewed reminder, which returns after activity stops
-          and is cleared by opening the session. */}
+      {/* Every session row shows its state dot; the flat list still drops the
+          whole slot when the provisional blank row has nothing to show. */}
       {(!flat || showStatus) && (
         <span className={css.slot}>
           {showStatus && <SessionStatusDots statuses={statuses} />}

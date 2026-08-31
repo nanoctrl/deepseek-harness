@@ -14,16 +14,17 @@ describe('StateDot', () => {
     expect(dot.getAttribute('aria-hidden')).toBe('true')
   })
 
-  it('solid states are spans; ongoing is an svg pixel matrix', () => {
+  it('solid states are spans; ongoing is an svg light ring', () => {
     const { container, rerender } = render(<StateDot state="done" />)
     expect(container.firstElementChild?.tagName).toBe('SPAN')
     rerender(<StateDot state="ongoing" />)
-    const matrix = container.firstElementChild as SVGSVGElement
-    expect(matrix.tagName).toBe('svg')
-    const cells = matrix.querySelectorAll('rect')
-    expect(cells).toHaveLength(8)
-    // Chase phase: every cell carries its own negative animation delay.
-    const delays = [...cells].map(cell => (cell).style.animationDelay)
+    const ring = container.firstElementChild as SVGSVGElement
+    expect(ring.tagName).toBe('svg')
+    // The ring holds one static glow core plus eight animated lights.
+    const lights = [...ring.querySelectorAll('circle')].filter(circle => circle.style.animationDelay !== '')
+    expect(lights).toHaveLength(8)
+    // Chase phase: every light carries its own negative animation delay.
+    const delays = lights.map(light => light.style.animationDelay)
     expect(new Set(delays).size).toBe(8)
   })
 
