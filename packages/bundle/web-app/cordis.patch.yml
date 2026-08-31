@@ -114,12 +114,6 @@
     - id: voice-dictation
       name: '@deepseek-ai/dsh-host-voice-dictation'
 
-    # Permanent session deletion: hosts the deleteSession Remote the session
-    # row menu footer action calls. Refuses live sessions — the operator
-    # archives and closes a session before deleting it.
-    - id: delete-session
-      name: '@deepseek-ai/dsh-host-delete-session'
-
     # The API gateway: the transport-agnostic dispatch face every client shape
     # shares. The base layer's agent-default-model service owns the default model.
     - id: api-gateway
@@ -286,11 +280,6 @@
     # overlay and progress, over the voiceTranscribe Remote.
     - id: ui-voice-dictation
       name: '@deepseek-ai/dsh-client-ui-voice-dictation'
-
-    # Session-row delete action: the destructive menu footer row over the
-    # deleteSession Remote.
-    - id: ui-delete-session
-      name: '@deepseek-ai/dsh-client-ui-delete-session'
 
     # Goal surface: GoalBar in the input dock over the goal session projection.
     - id: ui-goal
