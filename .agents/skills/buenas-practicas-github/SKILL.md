@@ -1,6 +1,11 @@
 ---
 name: buenas-practicas-github
-description: Usar al gestionar repositorios de GitHub desde DSH — crear y nombrar remotes, autenticar (SSH vs gh vs keychain), crear forks, separar trabajos al commitear, pushear de forma limpia y segura, y abrir/verificar pull requests. Resume las trampas reales: SSH no crea forks, el keychain puede ser invisible para el sandbox, y los pushes non-fast-forward.
+description: |
+  Usar al gestionar repositorios de GitHub desde DSH — crear y nombrar remotes,
+  autenticar (SSH vs gh vs keychain), crear forks, separar trabajos al
+  commitear, pushear de forma limpia y segura, y abrir/verificar pull requests.
+  Resume las trampas reales: SSH no crea forks, el keychain puede ser invisible
+  para el sandbox, y los pushes non-fast-forward.
 ---
 
 # Buenas prácticas: gestión de GitHub y pushes

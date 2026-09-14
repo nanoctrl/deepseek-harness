@@ -1,11 +1,36 @@
 ---
 name: sync-fork-upstream
-description: Usar para traer las actualizaciones del repositorio upstream de DeepSeek a un fork/clone personal con trabajo local propio (no colaborativo). Chequea si upstream avanzó, integra origin/master por merge en la branch de trabajo, resuelve conflictos, verifica build/tests y pushea al fork. No aplica a repos sin divergencia local: ahí el sync es fast-forward trivial.
+description: |
+  Usar para traer las actualizaciones del repositorio upstream de DeepSeek a
+  un fork/clone personal con trabajo local propio (no colaborativo). Chequea si
+  upstream avanzó, integra origin/master por merge en la branch de trabajo,
+  resuelve conflictos, verifica build/tests y pushea al fork. Incluye la regla
+  crítica de no reconstruir artefactos del cliente desde el agente DSH (el
+  rebuild mata la sesión). No aplica a repos sin divergencia local: ahí el sync
+  es fast-forward trivial.
 ---
 
 # Sincronizar el fork con upstream
 
 Protocolo para un fork personal de `deepseek-harness` que contiene trabajo local que upstream no tiene (paquetes nuevos, modificaciones propias). El objetivo es conservar lo local **y** traer las novedades del repo oficial de DeepSeek.
+
+## ⚠️ Regla crítica: reconstruir artefactos desde el agente mata la sesión
+
+El agente DSH corre **dentro** del proceso del Web GUI (`com.nanoctrl.dsh`, `KeepAlive=true`). Reconstruir los artefactos del **cliente** reescribe los bundles que ese mismo proceso sirve y observa por HMR: el proceso muere, el LaunchAgent lo relanza, y **la sesión del agente muere con él**. Se pierde el hilo de la conversación y el control de la operación a mitad de camino — el usuario queda sin agente y tiene que resolver desde una terminal externa.
+
+Reparto de responsabilidades:
+
+| Paso | Quién lo corre | Por qué |
+|---|---|---|
+| `git fetch / merge / commit / push`, resolver conflictos | Agente | No toca artefactos servidos |
+| `pnpm install`, `pnpm run typecheck`, `pnpm test`, `pnpm run test:gui` | Agente | Seguros: no reescriben los bundles del cliente |
+| `pnpm run build`, `build:lib:client`, `build:web` | **Usuario, en terminal externa** | Reescriben los artefactos que el GUI sirve |
+
+El agente **prepara el código y pushea**; el rebuild de artefactos lo hace el humano en una terminal normal (Terminal.app, iTerm) o por CLI (`claude`, `codex`).
+
+Si el agente tiene que reconstruir igual (no hay terminal externa disponible): avisar al usuario **en el mismo mensaje y antes de correrlo**, dejar el comando de recuperación a mano, y ejecutarlo como **último** paso — nada posterior puede depender de la sesión.
+
+Recuperación si la sesión muere: el server vuelve solo por KeepAlive; verificar con `reiniciar-server-dsh` (sección "Verificar") y usar el `RECOVERY.md` del fork para volver a un estado conocido.
 
 ## Por qué no es un "sync fork" de GitHub
 
@@ -79,14 +104,15 @@ grep -rho "@deepseek-ai/dsh-[a-z0-9-]*" packages/<grupo>/<tu-paquete>/src | sort
 
 ## Verificar después del merge
 
-Con los conflictos resueltos, verificar que el conjunto compile y pase sus tests antes de pushear:
+Con los conflictos resueltos, verificar que el conjunto compile y pase sus tests antes de pushear. **Esta sección entera es segura desde el agente**: ninguno de estos comandos reescribe los bundles del cliente que el GUI sirve.
 
 ```sh
 pnpm install               # regenerar el lock si el merge tocó dependencias
 pnpm run typecheck         # delata imports rotos (paquetes que upstream borró/renombró)
-pnpm run build             # tsc + bundle de todas las caras
 pnpm run test:gui          # suites del cliente + host GUI (inner loop)
 ```
+
+`pnpm run build` queda **fuera** de esa lista a propósito: reconstruye los artefactos del cliente y mata la sesión (ver la regla crítica arriba). El rebuild completo es un paso del **usuario**, después del push — el agente no puede ejecutarlo ni verificarlo en la misma sesión.
 
 Confirmar además que cada paquete propio del fork siga presente y su feature funcione:
 
@@ -125,4 +151,5 @@ Mismo tratamiento de conflictos. Así cada branch queda sobre la última base.
 
 - El **primer** merge es el más grande: acumula toda la divergencia (1313+ commits de upstream contra 3300+ líneas locales). Los siguientes son incrementales.
 - Los conflictos de `cordis.patch.yml` / `package.json` del bundle web-app son los más probables y los que más cuidado requieren (ambos lados agregan filas).
-- Verificar siempre build + tests tras el merge: un sync que rompe el build no es un sync.
+- Verificar siempre build + tests tras el merge: un sync que rompe el build no es un sync. Los tests los corre el agente; el **build lo verifica el usuario** desde una terminal externa (ver la regla crítica).
+- **El rebuild se auto-sabotea**: correr `pnpm run build` desde el agente mata el proceso que hospeda la sesión. Es el riesgo con peor relación daño/previsibilidad: no falla el build, falla *el entorno del que lo corre*. Preparar y pushear desde el agente; reconstruir desde afuera.
