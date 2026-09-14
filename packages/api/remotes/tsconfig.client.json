@@ -45,9 +45,6 @@
       "path": "../../host/delete-session"
     },
     {
-      "path": "../../host/instance-monitor"
-    },
-    {
       "path": "../../host/plugin-inventory"
     },
     {

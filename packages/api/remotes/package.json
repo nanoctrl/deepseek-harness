@@ -71,7 +71,6 @@
     "@deepseek-ai/dsh-file-reference": "workspace:^",
     "@deepseek-ai/dsh-goal": "workspace:^",
     "@deepseek-ai/dsh-host-delete-session": "workspace:^",
-    "@deepseek-ai/dsh-host-instance-monitor": "workspace:^",
     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:^",
     "@deepseek-ai/dsh-host-voice-dictation": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",

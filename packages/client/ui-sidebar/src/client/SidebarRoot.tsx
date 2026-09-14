@@ -265,15 +265,10 @@ export function SidebarRoot({
         })}
       </div>
 
-      {/* Footer actions stack above Settings in both sidebar widths; the
-          instance-monitor trigger rides the same foot stack. */}
+      {/* Footer actions stack above Settings in both sidebar widths. */}
       <div className={css.footArea}>
         <div className={css.footerActions}>
           {renderSlot('sidebar.footer.action', { wide })}
-          {renderSlot('sidebar.monitor', {
-            wide,
-            expandSidebar: () => { if (collapsed) toggleSidebar() },
-          })}
         </div>
         <div className={css.settingsArea}>
           {renderSlot('sidebar.settings', { wide })}
