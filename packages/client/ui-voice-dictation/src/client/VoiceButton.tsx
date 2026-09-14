@@ -5,7 +5,8 @@
  * grows with the voice. A double clap or double snap, Enter, or a click on the
  * circle stops and transcribes via the host `voiceTranscribe` Remote, showing
  * an estimated 0→100% progress. On success the text is inserted in the composer
- * and the caret is placed at the end so Enter sends it.
+ * and the caret is placed at the end so Enter sends it. A failed transcription
+ * keeps the recording so it can be retried (click) or downloaded.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
@@ -20,7 +21,7 @@ export type VoiceButtonProps = {
   /** Input actions for writing the draft. */
   inputActions?: { setDraft(text: string): void }
   /** Injected transcription callback. */
-  transcribe(payload: { b64: string; ext: string }): Promise<TranscribeResult>
+  transcribe(payload: { b64: string; ext: string; durationMs?: number }): Promise<TranscribeResult>
 } & VoiceDictationInjected
 
 type Status = 'idle' | 'recording' | 'transcribing' | 'error'
@@ -36,9 +37,13 @@ interface RecorderHolder {
   analyser: AnalyserNode | null
   recordStart: number
   durationMs: number
-  transcribeStart: number
   rafId: number
-  progRaf: number
+}
+
+/** Recording kept after a failed transcription, for retry or download. */
+interface SavedRecording {
+  blob: Blob
+  durationMs: number
 }
 
 const SHORTCUT = { ctrl: true, shift: false, alt: false, key: 'm' }
@@ -93,6 +98,16 @@ function errIcon(): ReactElement {
   )
 }
 
+function downloadIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1={12} y1={15} x2={12} y2={3} />
+    </svg>
+  )
+}
+
 /** Stop every track and disconnect/close the analyser graph. */
 function stopStreamAndAudio(h: RecorderHolder): void {
   if (h.stream) h.stream.getTracks().forEach((t) => { try { t.stop() } catch { /* already stopped */ } })
@@ -109,6 +124,8 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
   const holderRef = useRef<RecorderHolder | null>(null)
   const circleRef = useRef<HTMLDivElement | null>(null)
   const pctRef = useRef<HTMLSpanElement | null>(null)
+  const lastRecordingRef = useRef<SavedRecording | null>(null)
+  const transcribeMetaRef = useRef<{ start: number; durationMs: number }>({ start: 0, durationMs: 0 })
 
   function fail(msg: string): void {
     setErr(msg || 'Error')
@@ -116,7 +133,6 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const h = holderRef.current
     if (h) {
       if (h.rafId) cancelAnimationFrame(h.rafId)
-      if (h.progRaf) cancelAnimationFrame(h.progRaf)
       stopStreamAndAudio(h)
       holderRef.current = null
     }
@@ -158,10 +174,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
       }
     } catch { AC = null; src = null; analyser = null }
 
-    holderRef.current = {
-      rec, chunks, stream, mime, AC, src, analyser, recordStart: Date.now(),
-      durationMs: 0, transcribeStart: 0, rafId: 0, progRaf: 0,
-    }
+    holderRef.current = { rec, chunks, stream, mime, AC, src, analyser, recordStart: Date.now(), durationMs: 0, rafId: 0 }
     rec.start()
     setErr('')
     setStatus('recording')
@@ -171,27 +184,31 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const h = holderRef.current
     if (!h) { setStatus('idle'); return }
     h.durationMs = Date.now() - h.recordStart
-    h.transcribeStart = Date.now()
+    transcribeMetaRef.current = { start: Date.now(), durationMs: h.durationMs }
     setStatus('transcribing')
-    h.rec.onstop = () => { stopStreamAndAudio(h); void finalize(h) }
-    try { h.rec.stop() } catch { void finalize(h) }
+    h.rec.onstop = () => { stopStreamAndAudio(h); finalize(h) }
+    try { h.rec.stop() } catch { finalize(h) }
   }
 
-  async function finalize(h: RecorderHolder): Promise<void> {
+  function finalize(h: RecorderHolder): void {
     let blob: Blob | null = null
     try {
       const mime = (h.rec && h.rec.mimeType) || h.mime || 'audio/webm'
       if (h.chunks && h.chunks.length) blob = new Blob(h.chunks, { type: mime })
     } catch { fail('Error al construir el audio'); return }
     if (!blob) { fail('No se grabó audio'); return }
+    lastRecordingRef.current = { blob, durationMs: h.durationMs }
+    void transcribeBlob(blob, h.durationMs)
+  }
 
+  async function transcribeBlob(blob: Blob, durationMs: number): Promise<void> {
     let b64 = ''
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const fr = new FileReader()
         fr.onload = () => resolve(String(fr.result))
         fr.onerror = () => reject(fr.error)
-        fr.readAsDataURL(blob as Blob)
+        fr.readAsDataURL(blob)
       })
       b64 = dataUrl.split(',')[1] || ''
     } catch { fail('Error al leer el audio'); return }
@@ -200,18 +217,18 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const ext = (blob.type && blob.type.indexOf('mp4') !== -1) ? 'm4a' : 'webm'
     let res: TranscribeResult
     try {
-      res = await transcribe({ b64, ext })
+      res = await transcribe({ b64, ext, durationMs })
     } catch (e) { fail('Error de conexión: ' + (e instanceof Error ? e.message : String(e))); return }
 
     if (res && res.ok && res.text) {
       const text = res.text.trim()
-      if (h.progRaf) cancelAnimationFrame(h.progRaf)
       if (pctRef.current) pctRef.current.textContent = '100%'
       const cur = (input && input.draft) || ''
       const newDraft = text ? (cur ? (cur + ' ' + text) : text) : cur
       if (text && inputActions && typeof inputActions.setDraft === 'function') {
         inputActions.setDraft(newDraft)
       }
+      lastRecordingRef.current = null
       setStatus('idle')
       setErr('')
       // Place the caret at the end so Enter sends immediately.
@@ -233,9 +250,33 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     }
   }
 
+  function retry(): void {
+    const saved = lastRecordingRef.current
+    if (!saved) { void start(); return }
+    transcribeMetaRef.current = { start: Date.now(), durationMs: saved.durationMs }
+    setErr('')
+    setStatus('transcribing')
+    void transcribeBlob(saved.blob, saved.durationMs)
+  }
+
+  function download(): void {
+    const saved = lastRecordingRef.current
+    if (!saved) return
+    const ext = (saved.blob.type && saved.blob.type.indexOf('mp4') !== -1) ? 'm4a' : 'webm'
+    const url = URL.createObjectURL(saved.blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'dictado-' + Date.now() + '.' + ext
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10000)
+  }
+
   function onClick(): void {
     if (status === 'transcribing') return
     if (status === 'recording') { stop(); return }
+    if (status === 'error' && lastRecordingRef.current) { retry(); return }
     void start()
   }
 
@@ -329,20 +370,18 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
   // Estimated 0→99% progress while transcribing.
   useEffect(() => {
     if (status !== 'transcribing') return
-    const h = holderRef.current
     const pctEl = pctRef.current
     if (!pctEl) return
-    const durMs = (h && h.durationMs) || 0
-    const est = Math.max(7000, durMs * 1.8 + 4000)
+    const meta = transcribeMetaRef.current
+    const est = Math.max(7000, meta.durationMs * 1.8 + 4000)
     let raf = 0
     const tick = (): void => {
-      const elapsed = Date.now() - ((h && h.transcribeStart) || Date.now())
+      const elapsed = Date.now() - meta.start
       const pct = Math.min(99, Math.round(elapsed / est * 100))
       pctEl.textContent = pct + '%'
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    if (h) h.progRaf = raf
     return () => cancelAnimationFrame(raf)
   }, [status])
 
@@ -373,13 +412,23 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     ? 'Grabando — doble palmada o chasquido, Ctrl+M, Enter o clic para detener'
     : status === 'transcribing'
       ? 'Transcribiendo…'
-      : (status === 'error' ? (err || 'Reintentar dictado') : 'Dictado por voz (Ctrl+M)')
+      : (status === 'error'
+        ? (err || 'Reintentar dictado') + (lastRecordingRef.current ? ' — clic para reintentar' : '')
+        : 'Dictado por voz (Ctrl+M)')
 
   const buttonEl = (
     <button type="button" className={cls} title={title} aria-label={title} onClick={onClick} style={hidden ? { visibility: 'hidden' } : undefined}>
       {status === 'recording' || status === 'transcribing' ? null : status === 'error' ? errIcon() : micIcon()}
     </button>
   )
+
+  const downloadEl = (status === 'error' && lastRecordingRef.current)
+    ? (
+      <button type="button" className={css.btn} title="Descargar grabación" aria-label="Descargar grabación" onClick={download}>
+        {downloadIcon()}
+      </button>
+    )
+    : null
 
   let overlay: ReactElement | null = null
   if (status === 'recording') {
@@ -404,6 +453,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
   return (
     <>
       {buttonEl}
+      {downloadEl}
       {overlay}
     </>
   )

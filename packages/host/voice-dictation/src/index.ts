@@ -156,7 +156,11 @@ export class VoiceDictationGateway extends TypertRemoteService {
       writeFileSync(tmp, Buffer.from(b64, 'base64'))
       try {
         await ensureServer(root, model, this.config.serverWaitMs ?? 30000)
-        const text = (await transcribeFile(root, model, language, tmp, this.config.timeoutMs ?? 180000)).trim()
+        // whisper corre ~1.8x tiempo real en CPU; escalar el timeout con la
+        // duración (3x + 30 s de margen) y topar en 1 h para evitar colgarse.
+        const durMs = typeof payload.durationMs === 'number' && payload.durationMs > 0 ? payload.durationMs : 0
+        const timeoutMs = Math.min(3_600_000, Math.max(this.config.timeoutMs ?? 180_000, durMs * 3 + 30_000))
+        const text = (await transcribeFile(root, model, language, tmp, timeoutMs)).trim()
         if (!text) return { ok: false, error: 'Transcripción vacía' }
         return { ok: true, text }
       } finally {

@@ -21,7 +21,7 @@ export const inject = ['slots', 'remote', 'remote.voiceTranscribe']
 
 /** Register the mic button once ui-conversation declares `conversation.input.left`. */
 export function apply(ctx: Context): void {
-  const transcribe = async (payload: { b64: string; ext: string }): Promise<TranscribeResult> => {
+  const transcribe = async (payload: { b64: string; ext: string; durationMs?: number }): Promise<TranscribeResult> => {
     const result = await ctx.remote.voiceTranscribe.transcribe(payload)
     if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
     return result.value

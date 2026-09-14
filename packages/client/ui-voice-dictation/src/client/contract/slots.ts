@@ -11,5 +11,5 @@ import type { TranscribeResult } from '@deepseek-ai/dsh-api-remotes/client'
 /** Registrant-private share injected into the voice button component. */
 export interface VoiceDictationInjected {
   /** Transcribe a base64 audio clip via the host `voiceTranscribe` Remote. */
-  transcribe(payload: { b64: string; ext: string }): Promise<TranscribeResult>
+  transcribe(payload: { b64: string; ext: string; durationMs?: number }): Promise<TranscribeResult>
 }

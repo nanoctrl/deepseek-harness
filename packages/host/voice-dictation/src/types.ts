@@ -4,6 +4,8 @@ export interface TranscribePayload {
   readonly b64: string
   /** Container hint (e.g. `webm` or `m4a`). Default `webm`. */
   readonly ext?: string
+  /** Recording duration in ms, used to scale the transcription timeout. */
+  readonly durationMs?: number
 }
 
 /** Result of one transcription attempt. */
