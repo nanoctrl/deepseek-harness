@@ -1,8 +1,8 @@
-/* Ongoing color rides the shared activity alias; the component-local var keeps
- * the solid states and the ring resolving through one --dsw-* token. */
+/* Ongoing blue has no alias token (state-business-primary is the 500 step,
+ * not this 450) — component-level var pinned to the static scale instead. */
 .dot,
-.ring {
-  --dsh-state-ongoing: var(--dsw-alias-state-ongoing-primary);
+.matrix {
+  --dsh-state-ongoing: var(--dsw-static-deepseek-450);
 }
 
 /* Solid states: same-color halo via a 0.10-opacity outer layer (::before)
@@ -18,6 +18,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  corner-shape: round;
   background: currentColor;
   opacity: 0.1;
 }
@@ -27,6 +28,7 @@
   position: absolute;
   inset: 20%;
   border-radius: 50%;
+  corner-shape: round;
   background: currentColor;
 }
 
@@ -42,36 +44,30 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
-/* Ongoing: a soft glowing core behind a ring of lights that chase clockwise.
- * Each light holds a discrete brightness step (flat keyframe holds, no
- * tweening) and decays over the next three lights. Phase offsets come from
- * per-light animation-delay set inline by the component. */
-.ring {
+/* Idle is the absence of activity, not a fourth outcome: it stays on the
+ * tertiary label color so it recedes beside the three outcome colors. */
+.dot[data-state='idle'] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Pixel chase: each outer cell holds a discrete brightness step (flat keyframe
+ * holds, no tweening — the retro feel), peaking when the chase hits it and
+ * decaying over the next three cells. Phase offsets come from per-rect
+ * animation-delay (index * -125ms) set inline by the component. */
+.matrix {
   flex: none;
   color: var(--dsh-state-ongoing);
 }
 
-.core {
+.cell {
   fill: currentColor;
-  opacity: 0.16;
+  opacity: 0.15;
+  animation: dsh-state-dot-chase 1s infinite;
 }
 
-.light {
-  fill: currentColor;
-  opacity: 0.3;
-  animation: dsh-state-ring-chase 1s infinite;
-}
-
-@keyframes dsh-state-ring-chase {
+@keyframes dsh-state-dot-chase {
   0%, 12.4% { opacity: 1; }
-  12.5%, 24.9% { opacity: 0.7; }
-  25%, 37.4% { opacity: 0.45; }
-  37.5%, 100% { opacity: 0.3; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .light {
-    animation: none;
-    opacity: 0.7;
-  }
+  12.5%, 24.9% { opacity: 0.6; }
+  25%, 37.4% { opacity: 0.35; }
+  37.5%, 100% { opacity: 0.15; }
 }

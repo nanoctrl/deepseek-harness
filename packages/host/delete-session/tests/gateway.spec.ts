@@ -13,6 +13,7 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
+import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import DeleteSessionGateway, { DeleteSessionLiveError, DeleteSessionUnknownError } from '../src/index.ts'
 
@@ -67,10 +68,18 @@ describe('DeleteSessionGateway integration', () => {
     // Materialize the session BEFORE the registry bootstraps so it is
     // accounted into a workspace for its cwd. One event makes it listable
     // (list() excludes zero-event sessions).
-    await h.ctx.sessionPersistence.create({ version: 0, id: id as SessionId, createdAt: Date.now(), cwd })
-    await h.ctx.sessionPersistence.append(id as SessionId, [
-      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-    ] as never)
+    const handle = await h.ctx.sessionPersistence.create({
+      version: SESSION_FORMAT_VERSION,
+      id: id as SessionId,
+      createdAt: Date.now(),
+      cwd,
+      isSeeded: false,
+    })
+    await handle.append([
+      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+    ])
+    await handle.flush()
+    await handle.close()
     await h.ctx.plugin(WorkspaceRegistry)
     const registry = h.ctx.workspaceRegistry
     const gateway = new DeleteSessionGateway(h.ctx)
@@ -80,7 +89,7 @@ describe('DeleteSessionGateway integration', () => {
     expect(result.deleted).toBe(true)
 
     // Gone from persistence and from registry accounting.
-    expect((await h.ctx.sessionPersistence.list()).map(header => header.id)).not.toContain(id)
+    expect((await h.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id)).not.toContain(id)
     expect(registry.list()[0]!.sessionIds).not.toContain(id)
     // Gone from disk: the log directory and the emptied project directory.
     expect(await readdir(sessionRoot)).toEqual([])
@@ -91,10 +100,18 @@ describe('DeleteSessionGateway integration', () => {
     const cwd = await makeTempRoot('cwd-live')
     const h = await harness(sessionRoot)
     const id = 'e2e-live'
-    await h.ctx.sessionPersistence.create({ version: 0, id: id as SessionId, createdAt: Date.now(), cwd })
-    await h.ctx.sessionPersistence.append(id as SessionId, [
-      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-    ] as never)
+    const handle = await h.ctx.sessionPersistence.create({
+      version: SESSION_FORMAT_VERSION,
+      id: id as SessionId,
+      createdAt: Date.now(),
+      cwd,
+      isSeeded: false,
+    })
+    await handle.append([
+      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+    ])
+    await handle.flush()
+    await handle.close()
     h.running.set(id, { status: 'running' })
     await h.ctx.plugin(WorkspaceRegistry)
     const gateway = new DeleteSessionGateway(h.ctx)

@@ -68,7 +68,7 @@ export class DeleteSessionGateway extends TypertRemoteService {
     if (persistence === undefined) {
       throw new Error('session persistence is unavailable')
     }
-    const known = (await persistence.list()).some(header => header.id === id)
+    const known = (await persistence.list()).some(snapshot => snapshot.header.id === id)
     if (!known) throw new DeleteSessionUnknownError(sessionId)
 
     // 3. Forget registry accounting first (workspace accounts + archive set).
