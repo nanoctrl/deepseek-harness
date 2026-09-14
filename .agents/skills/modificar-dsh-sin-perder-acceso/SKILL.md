@@ -119,22 +119,22 @@ Salida: `0` = GUI arriba (o levantado), `1` = no se pudo (mirar el log).
 |---|---|---|
 | `KeepAlive` + wrapper | proceso muerto o colgado → relanza con backoff 1s→60s | ✅ ya activo |
 | `~/.dsh/dsh-health.sh` | incluye el caso **bootout**, que KeepAlive **no** cubre | ⚠️ a demanda |
-| Watchdog (LaunchAgent aparte) | corre `dsh-health.sh` cada N segundos | ❌ no instalado |
+| `~/.dsh/dsh-watch.sh` (ventana) | watchdog **temporal** durante una actualización | ⚠️ se abre a mano |
 
 El wrapper **no** cubre el bootout deliberado tras 10 crashes: ahí launchd ya no tiene el agente cargado y **nada lo relanza solo**. Ése es exactamente el hueco que tapa `dsh-health.sh`, y el motivo de correrlo después de un build rojo.
 
-Para cobertura sin intervención, un watchdog es un LaunchAgent separado (mismo `dsh-health.sh`, sin lógica nueva):
+### Watchdog de ventana (temporal, a propósito)
 
-```xml
-<!-- ~/Library/LaunchAgents/com.nanoctrl.dsh-watchdog.plist (resumen) -->
-<key>Label</key><string>com.nanoctrl.dsh-watchdog</string>
-<key>ProgramArguments</key>
-<array><string>/bin/bash</string><string>/Users/<usuario>/.dsh/dsh-health.sh</string><string>2</string><string>5</string></array>
-<key>StartInterval</key><integer>60</integer>
-<key>RunAtLoad</key><true/>
+Para una actualización puntual se abre una **ventana** que mantiene el GUI arriba mientras corre el build y después se cierra sola:
+
+```sh
+~/.dsh/dsh-watch.sh 15 30     # verifica cada 15s, ventana de 30min (tope de seguridad)
+~/.dsh/dsh-watch.sh 10 0      # cada 10s, sin tope: se corta con Ctrl+C
 ```
 
-Trade-off: un watchdog revive el agente cada minuto aunque el crash sea determinístico (config rota). No es un loop apretado, pero mantiene el proceso intentando. Instalarlo solo si preferís "siempre arriba" por sobre "fallar callado".
+Se lanza desde la **terminal externa**, en otra pestaña, *antes* del build. Reporta cada ciclo, levanta el GUI si lo ve caído, y al terminar —por tope de tiempo o Ctrl+C— **no deja nada activo**: no instala LaunchAgent ni deja proceso residente.
+
+**Por qué no es permanente**: un watchdog que revive el GUI para siempre *oculta* el fallo en vez de mostrarlo. Si el crash es determinista (config rota, plugin inválido), el resultado sería un GUI reiniciándose en loop silencioso y un diagnóstico imposible. La ventana acota el auto-recuperado a la operación que realmente lo necesita; fuera de ella, el sistema falla visible.
 
 ## Diagnóstico de una caída
 
