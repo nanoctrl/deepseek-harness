@@ -129,7 +129,7 @@ describe('SidebarRoot shell', () => {
     />)
 
     expect(screen.getByText('DSH Local Build')).toBeTruthy()
-    expect(screen.getByText('1.2.3-rc.4-0123456-dirty')).toBeTruthy()
+    expect(screen.getByText('fork · 1.2.3-rc.4-0123456-dirty')).toBeTruthy()
     expect(container.querySelector('svg')).not.toBeNull()
   })
 
@@ -149,10 +149,10 @@ describe('SidebarRoot shell', () => {
     />)
 
     expect(screen.getByText('DSH Local Build')).toBeTruthy()
-    expect(screen.getByText(expected)).toBeTruthy()
+    expect(screen.getByText(`fork · ${expected}`)).toBeTruthy()
   })
 
-  it('retains the local-build fallback without complete build metadata', () => {
+  it('keeps the fork badge visible without complete build metadata', () => {
     render(<SidebarRoot
       collapsed={false} width={300}
       useSessions={neverHook} useSessionPendingInteraction={useSessionPendingInteraction}
@@ -164,6 +164,7 @@ describe('SidebarRoot shell', () => {
     />)
 
     expect(screen.getByText('DSH Local Build')).toBeTruthy()
+    expect(screen.getByText('fork · dev')).toBeTruthy()
   })
 
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {

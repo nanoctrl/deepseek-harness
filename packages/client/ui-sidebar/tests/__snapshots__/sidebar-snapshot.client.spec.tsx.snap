@@ -152,7 +152,7 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
                 <span
                   class="buildVersion"
                 >
-                  1.2.3-rc.4-abc1234-dirty
+                  fork · 1.2.3-rc.4-abc1234-dirty
                 </span>
               </span>
             </div>
@@ -286,7 +286,7 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
                 <span
                   class="buildVersion"
                 >
-                  1.2.3-rc.4-abc1234-dirty
+                  分支 · 1.2.3-rc.4-abc1234-dirty
                 </span>
               </span>
             </div>

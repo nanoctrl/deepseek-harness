@@ -38,6 +38,9 @@ const COLLAPSE_SETTLE_MS = 150
  */
 const SCROLLBAR_LINGER_MS = 2000
 
+/** Badge version for artifacts built without version metadata (source launch). */
+const UNVERSIONED_BUILD = 'dev'
+
 /** Format complete-build metadata for the local brand badge. */
 function localBuildVersion(): string | undefined {
   const version = process.env.DSH_CLIENT_VERSION
@@ -193,14 +196,12 @@ export function SidebarRoot({
               </span>
               <span className={css.brandName}>
                 {renderSlot('sidebar.brand.name', {}, {
-                  fallback: buildVersion === undefined
-                    ? <span className={css.fallbackBrandName}>{t('brand.localBuild')}</span>
-                    : (
-                      <span className={css.localBuildBrand}>
-                        <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
-                        <span className={css.buildVersion}>{buildVersion}</span>
-                      </span>
-                    ),
+                  fallback: (
+                    <span className={css.localBuildBrand}>
+                      <span className={css.localBuildTitle}>{t('brand.localBuild')}</span>
+                      <span className={css.buildVersion}>{`${t('brand.fork')} · ${buildVersion ?? UNVERSIONED_BUILD}`}</span>
+                    </span>
+                  ),
                 })}
               </span>
             </span>
