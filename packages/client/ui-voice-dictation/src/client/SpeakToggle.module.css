@@ -1,0 +1,48 @@
+/* Compañero del micrófono en la fila de herramientas del compositor: comparte
+   sus medidas para que los dos controles se lean como un par. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  corner-shape: round;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0.85;
+  flex: none;
+}
+
+.btn:hover:not(:disabled) {
+  opacity: 1;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+/* La lectura en curso se marca con el rojo del plugin, el mismo del micrófono
+   grabando: significa "esto está activo, volvé a apretar para cortarlo". */
+.active {
+  opacity: 1;
+  color: #fff;
+  background: #e5484d;
+}
+
+.spin {
+  display: inline-flex;
+  animation: rotate 0.9s linear infinite;
+}
+
+@keyframes rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}

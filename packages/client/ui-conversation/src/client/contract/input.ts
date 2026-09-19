@@ -219,6 +219,26 @@ export interface SessionInput extends InputTarget {
    * @param text - notice body.
    */
   notify(level: 'info' | 'error', text: string): void
+  /**
+   * Ordered `[start, end)` span of the editor's selection in detect
+   * coordinates. A Session whose editor is not mounted has no selection and
+   * answers a collapsed span at the document end, so a caller that inserts
+   * there appends to the draft when the Session is not the visible one.
+   * @returns the span to hand to {@link insertText}.
+   */
+  caretSpan(): { start: number; end: number }
+  /**
+   * Replace one detect span with plain text. Inserting at the collapsed span
+   * from {@link caretSpan} places text at the caret and leaves the rest of the
+   * draft untouched, which is what a caller writing on the user's behalf needs:
+   * `setDraft` replaces everything and would discard what was typed while the
+   * caller was working.
+   * @param text - the text to place at the span.
+   * @param span - the span to replace, carrying the revision it was read at.
+   * @param keepCompleting - whether an open trigger menu survives the edit.
+   * @returns whether the edit applied; a stale revision refuses it.
+   */
+  insertText(text: string, span: TokenSpan, keepCompleting?: boolean): boolean
   /** Input state store (InputZone currency + decorations read here). */
   readonly state: SnapshotStore<InputState>
 }

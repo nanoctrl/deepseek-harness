@@ -21,6 +21,12 @@
       "path": "../ui-conversation"
     },
     {
+      "path": "../ui-chat"
+    },
+    {
+      "path": "../locale"
+    },
+    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {

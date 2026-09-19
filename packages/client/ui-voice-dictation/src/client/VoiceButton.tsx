@@ -4,24 +4,29 @@
  * Click (or Ctrl+M) starts recording; a red circle slides to screen center and
  * grows with the voice. A double clap or double snap, Enter, or a click on the
  * circle stops and transcribes via the host `voiceTranscribe` Remote, showing
- * an estimated 0→100% progress. On success the text is inserted in the composer
- * and the caret is placed at the end so Enter sends it. A failed transcription
- * keeps the recording so it can be retried (click) or downloaded.
+ * an estimated 0→100% progress.
+ *
+ * The finished text is inserted at the caret of the composer it was recorded
+ * in — never replacing what is already there, and never landing in another
+ * Session's composer when the user moves on before the transcription arrives.
+ * A failed transcription, or one that could not be placed, keeps the recording
+ * so it can be retried (click) or downloaded.
  */
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { TranscribeResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { VoiceDictationInjected } from './contract/slots.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { VoiceDictationInjected, VoiceDictationTranslate } from './contract/slots.ts'
 import css from './VoiceButton.module.css'
 
-/** Full component props: the injected transcribe callback plus what the button needs. */
+/** Full component props: the injected callbacks plus what the button needs. */
 export type VoiceButtonProps = {
-  /** Live InputState snapshot (draft). */
-  input?: { readonly draft?: string }
-  /** Input actions for writing the draft. */
-  inputActions?: { setDraft(text: string): void }
+  /** Session whose composer this button lives in. */
+  sessionId: SessionId
   /** Injected transcription callback. */
   transcribe(payload: { b64: string; ext: string; durationMs?: number }): Promise<TranscribeResult>
+  /** Copy of this package's locale namespace. */
+  t: VoiceDictationTranslate
 } & VoiceDictationInjected
 
 type Status = 'idle' | 'recording' | 'transcribing' | 'error'
@@ -118,17 +123,31 @@ function stopStreamAndAudio(h: RecorderHolder): void {
 
 /** The composer mic button plus the centered recording/transcription overlay. */
 export function VoiceButton(props: VoiceButtonProps): ReactElement {
-  const { transcribe, input, inputActions } = props
+  const { transcribe, insert, sessionId, t } = props
   const [status, setStatus] = useState<Status>('idle')
   const [err, setErr] = useState('')
   const holderRef = useRef<RecorderHolder | null>(null)
   const circleRef = useRef<HTMLDivElement | null>(null)
   const pctRef = useRef<HTMLSpanElement | null>(null)
   const lastRecordingRef = useRef<SavedRecording | null>(null)
+  // Sesión donde se grabó, fijada al arrancar: la transcripción tiene que
+  // volver ahí aunque el usuario se haya ido a otra conversación mientras
+  // tanto, y aunque este componente se recicle para otra sesión.
+  const sessionRef = useRef<SessionId | null>(null)
   const transcribeMetaRef = useRef<{ start: number; durationMs: number }>({ start: 0, durationMs: 0 })
 
+  // Salir del compositor no puede dejar el micrófono abierto.
+  useEffect(() => () => {
+    const h = holderRef.current
+    if (h === null) return
+    if (h.rafId) cancelAnimationFrame(h.rafId)
+    try { h.rec.stop() } catch { /* ya estaba detenido */ }
+    stopStreamAndAudio(h)
+    holderRef.current = null
+  }, [])
+
   function fail(msg: string): void {
-    setErr(msg || 'Error')
+    setErr(msg || t('mic.error'))
     setStatus('error')
     const h = holderRef.current
     if (h) {
@@ -140,14 +159,14 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
 
   async function start(): Promise<void> {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-      fail('Este navegador no soporta grabación de micrófono')
+      fail(t('mic.unsupported'))
       return
     }
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch (e) {
-      fail((e instanceof DOMException && e.name === 'NotAllowedError') ? 'Permiso de micrófono denegado' : 'No se pudo acceder al micrófono')
+      fail((e instanceof DOMException && e.name === 'NotAllowedError') ? t('mic.denied') : t('mic.unavailable'))
       return
     }
     let mime = ''
@@ -158,7 +177,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
     const chunks: Blob[] = []
     rec.ondataavailable = (e) => { if (e && e.data && e.data.size > 0) chunks.push(e.data) }
-    rec.onerror = () => fail('Error de grabación')
+    rec.onerror = () => fail(t('mic.recordFailed'))
 
     let AC: AudioContext | null = null
     let src: MediaStreamAudioSourceNode | null = null
@@ -175,6 +194,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     } catch { AC = null; src = null; analyser = null }
 
     holderRef.current = { rec, chunks, stream, mime, AC, src, analyser, recordStart: Date.now(), durationMs: 0, rafId: 0 }
+    sessionRef.current = sessionId
     rec.start()
     setErr('')
     setStatus('recording')
@@ -195,8 +215,8 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     try {
       const mime = (h.rec && h.rec.mimeType) || h.mime || 'audio/webm'
       if (h.chunks && h.chunks.length) blob = new Blob(h.chunks, { type: mime })
-    } catch { fail('Error al construir el audio'); return }
-    if (!blob) { fail('No se grabó audio'); return }
+    } catch { fail(t('mic.blobFailed')); return }
+    if (!blob) { fail(t('mic.empty')); return }
     lastRecordingRef.current = { blob, durationMs: h.durationMs }
     void transcribeBlob(blob, h.durationMs)
   }
@@ -211,42 +231,32 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
         fr.readAsDataURL(blob)
       })
       b64 = dataUrl.split(',')[1] || ''
-    } catch { fail('Error al leer el audio'); return }
-    if (!b64) { fail('Audio vacío'); return }
+    } catch { fail(t('mic.readFailed')); return }
+    if (!b64) { fail(t('mic.audioEmpty')); return }
 
     const ext = (blob.type && blob.type.indexOf('mp4') !== -1) ? 'm4a' : 'webm'
     let res: TranscribeResult
     try {
       res = await transcribe({ b64, ext, durationMs })
-    } catch (e) { fail('Error de conexión: ' + (e instanceof Error ? e.message : String(e))); return }
+    } catch (e) { fail(t('mic.connection') + ': ' + (e instanceof Error ? e.message : String(e))); return }
 
     if (res && res.ok && res.text) {
       const text = res.text.trim()
-      if (pctRef.current) pctRef.current.textContent = '100%'
-      const cur = (input && input.draft) || ''
-      const newDraft = text ? (cur ? (cur + ' ' + text) : text) : cur
-      if (text && inputActions && typeof inputActions.setDraft === 'function') {
-        inputActions.setDraft(newDraft)
+      const target = sessionRef.current
+      // El destino es la sesión donde se grabó, no la que el usuario esté
+      // mirando ahora. Si su compositor ya no existe, el audio no se pierde:
+      // queda guardado y el usuario lo puede reintentar o descargar.
+      if (!text) { lastRecordingRef.current = null; setStatus('idle'); setErr(''); return }
+      if (target === null || !insert(target, text)) {
+        fail(t('mic.insertFailed'))
+        return
       }
+      if (pctRef.current) pctRef.current.textContent = '100%'
       lastRecordingRef.current = null
       setStatus('idle')
       setErr('')
-      // Place the caret at the end so Enter sends immediately.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        try {
-          const tas = document.querySelectorAll('textarea')
-          for (const ta of tas) {
-            if (ta.value === newDraft) {
-              ta.focus()
-              const len = ta.value.length
-              ta.setSelectionRange(len, len)
-              break
-            }
-          }
-        } catch { /* best-effort */ }
-      }))
     } else {
-      fail((res && res.error) || 'Error de transcripción')
+      fail((res && res.error) || t('mic.transcribeFailed'))
     }
   }
 
@@ -396,7 +406,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
       }
       if (status === 'recording') {
         if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); stop() }
-        else if (event.key === 'Escape') { fail('Cancelado') }
+        else if (event.key === 'Escape') { fail(t('mic.cancelled')) }
       }
     }
     window.addEventListener('keydown', onKey, true)
@@ -409,12 +419,12 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     + (status === 'error' ? ' ' + css.error : '')
     + (hidden ? ' ' + css.hidden : '')
   const title = status === 'recording'
-    ? 'Grabando — doble palmada o chasquido, Ctrl+M, Enter o clic para detener'
+    ? t('mic.titleRecording')
     : status === 'transcribing'
-      ? 'Transcribiendo…'
+      ? t('mic.titleTranscribing')
       : (status === 'error'
-        ? (err || 'Reintentar dictado') + (lastRecordingRef.current ? ' — clic para reintentar' : '')
-        : 'Dictado por voz (Ctrl+M)')
+        ? (err || t('mic.titleRetry')) + (lastRecordingRef.current ? t('mic.retryHint') : '')
+        : t('mic.titleIdle'))
 
   const buttonEl = (
     <button type="button" className={cls} title={title} aria-label={title} onClick={onClick} style={hidden ? { visibility: 'hidden' } : undefined}>
@@ -424,7 +434,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
 
   const downloadEl = (status === 'error' && lastRecordingRef.current)
     ? (
-      <button type="button" className={css.btn} title="Descargar grabación" aria-label="Descargar grabación" onClick={download}>
+      <button type="button" className={css.btn} title={t('mic.download')} aria-label={t('mic.download')} onClick={download}>
         {downloadIcon()}
       </button>
     )
@@ -435,7 +445,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     overlay = (
       <div className={css.overlay}>
         <div className={css.stage}>
-          <div className={css.circle} ref={circleRef} onClick={stop} title="Detener" />
+          <div className={css.circle} ref={circleRef} onClick={stop} title={t('mic.stop')} />
         </div>
       </div>
     )

@@ -16,3 +16,20 @@ export interface TranscribeResult {
   /** Human-readable failure reason when `!ok`. */
   readonly error?: string
 }
+
+/** One segment of assistant prose the browser asks the host to speak. */
+export interface SynthesizePayload {
+  /** Prose to synthesize. Required and non-blank. */
+  readonly text: string
+}
+
+/** Result of one speech-synthesis attempt. */
+export interface SynthesizeResult {
+  readonly ok: boolean
+  /** Base64-encoded audio bytes when `ok`. */
+  readonly b64?: string
+  /** Container MIME type of `b64`. */
+  readonly mime?: string
+  /** Human-readable failure reason when `!ok`. */
+  readonly error?: string
+}

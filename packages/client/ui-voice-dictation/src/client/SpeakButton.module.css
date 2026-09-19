@@ -1,0 +1,96 @@
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Rides the Settings font-size axis like the host row's own actions
+     (ui-chat MessageIconActions), so slot-injected buttons match their
+     siblings at every size. */
+  width: calc(28px + var(--dsh-content-font-delta, 0px));
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  padding: 6px;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.action svg {
+  width: calc(15px + var(--dsh-content-font-delta, 0px));
+  height: calc(15px + var(--dsh-content-font-delta, 0px));
+}
+
+.action:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* La lectura en curso se distingue sin hover, porque sigue sonando cuando el
+   puntero ya salió de la fila. */
+.action[data-active] {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.spin {
+  display: inline-flex;
+  animation: rotate 0.9s linear infinite;
+}
+
+.meter {
+  display: inline-block;
+  width: 42px;
+  height: 3px;
+  margin: 0 2px;
+  border-radius: 2px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.bar {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--dsw-alias-label-secondary);
+  transition: width 0.15s linear;
+}
+
+.rate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 20px;
+  margin-left: 2px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rate:hover {
+  color: var(--dsw-alias-label-primary, currentColor);
+}
+
+.failure {
+  max-width: 220px;
+  overflow: hidden;
+  padding-left: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
