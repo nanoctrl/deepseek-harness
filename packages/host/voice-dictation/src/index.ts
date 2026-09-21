@@ -45,6 +45,30 @@ const DEFAULT_SAY_VOICE = 'Paulina'
  */
 const DEFAULT_TTS_BITRATE = 48000
 /**
+ * Anglicismos que en el habla técnica se dicen en inglés. El daemon los
+ * pronuncia con fonética inglesa y deja el resto de la frase en castellano.
+ *
+ * Es un punto de partida, no una verdad: la calibración depende de cómo hable
+ * cada uno. Muchos decimos "token", "cache", "email", "link" o "file" en
+ * castellano, así que quedaron afuera; agregarlos o sacarlos es cambiar esta
+ * lista en la composición.
+ */
+const DEFAULT_ENGLISH_WORDS: string[] = [
+  'async', 'await', 'backend', 'backlog', 'backup', 'bandwidth', 'batch', 'benchmark',
+  'branch', 'bucket', 'buffer', 'build', 'callback', 'chat', 'click', 'clone',
+  'cloud', 'cluster', 'commit', 'compiler', 'container', 'dashboard', 'dataset', 'deadline',
+  'debug', 'deploy', 'deployment', 'downtime', 'dropdown', 'driver', 'embedding', 'fallback',
+  'feature', 'feedback', 'fork', 'framework', 'freelance', 'frontend', 'gradient',
+  'handshake', 'hardware', 'healthcheck', 'hotfix', 'inference', 'kernel', 'latency',
+  'lint', 'logout', 'manager', 'marketing', 'meeting', 'merge', 'migration', 'milestone',
+  'mock', 'modal', 'offline', 'onboarding', 'online', 'parser', 'patch', 'payload',
+  'pipeline', 'plugin', 'promise', 'prompt', 'pull', 'push', 'queue', 'release',
+  'render', 'repo', 'repository', 'retry', 'roadmap', 'rollback', 'runner',
+  'runtime', 'script', 'snapshot', 'socket', 'software', 'sprint', 'stack', 'standup',
+  'storage', 'stream', 'stub', 'template', 'testing', 'thread', 'throughput', 'timeout',
+  'toggle', 'tooltip', 'uptime', 'widget', 'worker', 'wrapper',
+]
+/**
  * Longest prose one `synthesize` call accepts, in characters. The client splits
  * a message into segments well below this, so the ceiling only guards a direct
  * caller against a request whose reply would be unusably large.
@@ -86,6 +110,11 @@ export interface Config {
   ttsBitrate?: number
   /** Wait budget for the local TTS daemon to accept a request, in ms. Default 30000. */
   ttsWaitMs?: number
+  /**
+   * Anglicismos que el motor debe pronunciar con fonética inglesa en vez de
+   * castellana. Sólo aplica al motor `kokoro`, que es el que fonemiza.
+   */
+  ttsEnglishWords?: string[]
 }
 
 /** Strip ANSI escapes (the spinner's colors) and control characters from stderr. */
@@ -314,6 +343,7 @@ export class VoiceDictationGateway extends TypertRemoteService {
     ttsVoice: z.string().default(''),
     ttsBitrate: z.number().default(DEFAULT_TTS_BITRATE),
     ttsWaitMs: z.number().default(30000),
+    ttsEnglishWords: z.array(z.string()).default(DEFAULT_ENGLISH_WORDS),
   })
 
   /** In-flight daemon start, so concurrent segments share one launch. */
@@ -403,7 +433,13 @@ export class VoiceDictationGateway extends TypertRemoteService {
     this.ttsStart ??= startTtsServer(root, this.config.ttsWaitMs ?? 30000)
       .finally(() => { this.ttsStart = null })
     await this.ttsStart
-    const reply = await ttsRequest(TTS_SOCKET, { text, voice, speed: 1 }, TTS_REQUEST_TIMEOUT_MS)
+    const reply = await ttsRequest(TTS_SOCKET, {
+      text,
+      voice,
+      speed: 1,
+      // El daemon fonemiza; acá sólo se decide qué palabras suenan en inglés.
+      english_words: this.config.ttsEnglishWords ?? DEFAULT_ENGLISH_WORDS,
+    }, TTS_REQUEST_TIMEOUT_MS)
     if ('error' in reply) return { ok: false, error: reply.error }
     const m4aPath = join(tmpdir(), `dsh-tts-${Date.now()}-${Math.floor(Math.random() * 1e6)}.m4a`)
     try {

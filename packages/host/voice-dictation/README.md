@@ -32,8 +32,17 @@ The browser client never talks to either socket directly: the Host bridges them 
 | `ttsVoice` | `''` | voice of the chosen engine; empty picks `ef_dora` for kokoro, `Paulina` for say |
 | `ttsBitrate` | `48000` | AAC bit rate; the reply is base64, so this sizes the payload |
 | `ttsWaitMs` | `30000` | budget for the Kokoro daemon to accept a request |
+| `ttsEnglishWords` | a curated list | anglicisms the engine pronounces with English phonetics |
 
 The two engines name voices differently, so `ttsVoice` has no cross-engine default: leaving it empty resolves to the chosen engine's own voice. `ef_dora` is the only female Spanish voice in Kokoro v1.0; `Paulina` is the `es_MX` macOS voice, and macOS ships no `es_AR` voice.
+
+## English words inside Spanish speech
+
+Kokoro has one phoneme vocabulary shared by every language: `lang` selects the text-to-phonemes converter, not the model. So the daemon phonemizes the whole sentence as Spanish — keeping its prosody, its stress, and its context-dependent allophones — and then replaces only the token of each word in `ttsEnglishWords` with that word's English phonemes. `de deploy` in Spanish is `deplˈoɪ`; swapped it is `dᵻplˈɔɪ`.
+
+Phonemizing each language as its own span does not work, and the difference is audible: isolated Spanish fragments make espeak stress articles (`el` becomes `ˈel`) and lose the `d`→`ð` allophony that depends on the preceding sound. Substituting inside the phoneme string does not work either, because the same word renders differently in context — `background` is `bakɣɾˈownd` alone and `βakɣɾˈoʊnd` after a vowel.
+
+The word-to-token alignment the swap relies on is 1:1 in ordinary prose but empirical: espeak expands numbers and some abbreviations into several tokens. When the counts disagree the daemon refuses the swap and synthesizes the sentence as plain Spanish, so a sentence like "costó $20 y tardó 5 min" degrades to the previous behaviour instead of producing scrambled audio. The list only applies to the `kokoro` engine, which is the one that phonemizes; `say` has its own dictionaries.
 
 ## Model Experience
 
