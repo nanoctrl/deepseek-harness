@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import type { ReactElement } from 'react'
 import clsx from 'clsx'
-import { IconTrashOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconTrashOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionActionInjected } from './contract/slots.ts'
 import css from './DeleteSessionItem.module.css'
@@ -45,7 +45,7 @@ export function DeleteSessionItem(props: DeleteSessionItemProps): ReactElement |
       }}
       disabled={busy}
     >
-      <IconTrashOutline16 />
+      <IconTrashOutlineRegular />
       <span>{busy ? t('action.busy') : t('action.label')}</span>
     </button>
   )
