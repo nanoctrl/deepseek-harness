@@ -14,23 +14,84 @@ description: |
 
 Protocolo para un fork personal de `deepseek-harness` que contiene trabajo local que upstream no tiene (paquetes nuevos, modificaciones propias). El objetivo es conservar lo local **y** traer las novedades del repo oficial de DeepSeek.
 
-## ⚠️ Regla crítica: reconstruir artefactos desde el agente mata la sesión
+## ⚠️ Regla crítica: el merge y el rebuild pueden matar tu propia herramienta
 
-El agente DSH corre **dentro** del proceso del Web GUI (`com.nanoctrl.dsh`, `KeepAlive=true`). Reconstruir los artefactos del **cliente** reescribe los bundles que ese mismo proceso sirve y observa por HMR: el proceso muere, el LaunchAgent lo relanza, y **la sesión del agente muere con él**. Se pierde el hilo de la conversación y el control de la operación a mitad de camino — el usuario queda sin agente y tiene que resolver desde una terminal externa.
+Hay **dos** formas de perder el control a mitad del sync, con la misma raíz: el agente vive dentro del checkout que estás modificando.
 
-Reparto de responsabilidades:
+### A. El merge borra el runtime del agente (rompe `run_code` sin matar el server)
 
-| Paso | Quién lo corre | Por qué |
-|---|---|---|
-| `git fetch / merge / commit / push`, resolver conflictos | Agente | No toca artefactos servidos |
-| `pnpm install`, `pnpm run typecheck`, `pnpm test`, `pnpm run test:gui` | Agente | Seguros: no reescriben los bundles del cliente |
-| `pnpm run build`, `build:lib:client`, `build:web` | **Usuario, en terminal externa** | Reescriben los artefactos que el GUI sirve |
+Upstream reestructura paquetes. En el salto 0.1.5 → 0.1.7 movió el runtime de ejecución de código: `packages/code-runtime/code-runtime-worker-thread/src/worker.ts` dejó de existir (pasó a `packages/ptc-runtime/`). El server viejo —que corre el código viejo— sigue vivo, pero **cada `run_code` falla con `Cannot find module ...worker.ts`**: la herramienta con la que resolvés conflictos se rompe inmediatamente después del `git merge`.
 
-El agente **prepara el código y pushea**; el rebuild de artefactos lo hace el humano en una terminal normal (Terminal.app, iTerm) o por CLI (`claude`, `codex`).
+Si lanzás el merge directo desde el agente, perdés la capacidad de resolver nada y dependés de una terminal externa (Claude Code, iTerm). Es exactamente el escenario que este protocolo evita.
 
-Si el agente tiene que reconstruir igual (no hay terminal externa disponible): avisar al usuario **en el mismo mensaje y antes de correrlo**, dejar el comando de recuperación a mano, y ejecutarlo como **último** paso — nada posterior puede depender de la sesión.
+### B. El rebuild reescribe los bundles que el server sirve
 
-Recuperación si la sesión muere: el server vuelve solo por KeepAlive; verificar con `reiniciar-server-dsh` (sección "Verificar") y usar el `RECOVERY.md` del fork para volver a un estado conocido.
+`pnpm run build` / `build:lib:client` / `build:web` reescriben artefactos que el GUI observa por HMR: el proceso muere, `KeepAlive` lo relanza, y la sesión muere con él.
+
+## Solución: resolver en un worktree aislado
+
+El server **sólo observa el checkout principal**. Un `git worktree` en otro directorio es invisible para él: ahí podés mergear, resolver conflictos y verificar sin perder el agente.
+
+```sh
+# 0. Checkpoint: nada sin commitear, todo pusheado
+git status --porcelain          # debe estar vacío
+git push dsh-nanoctrl-fork master
+
+# 1. Worktree en una branch propia (el principal queda intacto)
+git worktree add -b sync/upstream ../dsh-sync master
+cd ../dsh-sync
+
+# 2. Merge + conflictos + verificación, todo AISLADO
+git merge origin/master --no-edit
+# ... resolver conflictos, git add -A, git commit ...
+pnpm install
+pnpm run typecheck
+pnpm test                       # o test:gui para cambios de GUI
+
+# 3. Volver al principal — el agente sigue vivo, nada se rompió
+cd <checkout-principal>
+```
+
+El trabajo riesgoso (merge, conflictos, verificación) queda **hecho y verificado** sin tocar el checkout que hospeda al agente.
+
+## Cierre controlado (el único paso que sí toca el principal)
+
+Aplicar el resultado rompe el worker igual, así que va en **un script que corre solo**: aunque el agente muera, el script termina, reconstruye y reinicia el server.
+
+```sh
+cat > ~/.dsh/aplicar-sync.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+cd /Users/nahuelmaeso/Desktop/claude-software/deepseek-harness
+git merge sync/upstream --no-edit            # ya resuelto: sin conflictos
+CI=true pnpm install --no-frozen-lockfile     # deps nuevas del upstream
+pnpm run build                                # reconstruye, incluido el runtime nuevo
+git push dsh-nanoctrl-fork master
+git worktree remove ../dsh-sync --force
+launchctl kickstart -kp gui/$(id -u)/com.nanoctrl.dsh
+EOF
+chmod +x ~/.dsh/aplicar-sync.sh
+```
+
+Lanzarlo **en background** (el agente muere durante el build, pero el script sigue):
+
+```sh
+~/.dsh/aplicar-sync.sh > /tmp/aplicar-sync.log 2>&1 &
+```
+
+El `kickstart` final devuelve la sesión al código nuevo. **Sin terminal externa y sin Claude Code.**
+
+### Verificación posterior
+
+Cuando el server vuelva:
+
+```sh
+~/.dsh/dsh-health.sh
+git log -1 --oneline                          # el merge aplicado
+git rev-list --count master..origin/master     # 0 = sincronizado
+```
+
+Si el worker volvió a romperse (merge de un salto que reestructura paquetes), el server ya reinició con el código nuevo: el problema se resuelve solo.
 
 ## Por qué no es un "sync fork" de GitHub
 
@@ -102,9 +163,9 @@ grep -rho "@deepseek-ai/dsh-[a-z0-9-]*" packages/<grupo>/<tu-paquete>/src | sort
    - **Descartar**: si upstream ya cubre la feature, quitar la versión local.
    - **Aislar**: si la versión local es independiente, dejarla tal cual.
 
-## Verificar después del merge
+## Verificar después del merge (dentro del worktree)
 
-Con los conflictos resueltos, verificar que el conjunto compile y pase sus tests antes de pushear. **Esta sección entera es segura desde el agente**: ninguno de estos comandos reescribe los bundles del cliente que el GUI sirve.
+Con los conflictos resueltos **en el worktree**, verificar que compile y pase tests. Todo esto es seguro ahí: el server no observa ese directorio.
 
 ```sh
 pnpm install               # regenerar el lock si el merge tocó dependencias
@@ -112,15 +173,25 @@ pnpm run typecheck         # delata imports rotos (paquetes que upstream borró/
 pnpm run test:gui          # suites del cliente + host GUI (inner loop)
 ```
 
-`pnpm run build` queda **fuera** de esa lista a propósito: reconstruye los artefactos del cliente y mata la sesión (ver la regla crítica arriba). El rebuild completo es un paso del **usuario**, después del push — el agente no puede ejecutarlo ni verificarlo en la misma sesión.
+El `pnpm run build` completo **no** va acá: es parte del cierre controlado (ver arriba), porque reconstruye los artefactos que el server principal sirve.
 
-Confirmar además que cada paquete propio del fork siga presente y su feature funcione:
+Confirmar que cada feature propia del fork siga **cableada**, no sólo que el paquete exista:
 
 ```sh
-ls packages/host/instance-monitor packages/host/delete-session packages/host/voice-dictation packages/client/ui-voice-dictation
+# 1. paquetes propios presentes
+ls packages/host/voice-dictation packages/host/delete-session \
+   packages/client/ui-voice-dictation packages/client/ui-delete-session
+
+# 2. anclajes de registro (lo que el merge suele pisar)
+grep -n 'voice-dictation\|delete-session' packages/bundle/web-app/cordis.patch.yml
+grep -n 'voice-dictation\|delete-session' packages/bundle/web-app/package.json packages/api/remotes/package.json
+grep -n 'voiceTranscribeRemote\|deleteSessionRemote' packages/api/remotes/src/client/index.ts
+grep -rn 'StateDot' packages/client/ui-workspace/src/client/rows/*.tsx
 ```
 
-Si algo falla o un paquete propio desapareció, corregirlo antes de pushear. No pushear esperando que CI lo arregle.
+Un paquete puede existir y **no estar cableado**: si el merge pisó un registro, la feature desaparece del GUI sin error de compilación. Revisar los anclajes, no sólo la existencia.
+
+Si algo falla o un anclaje desapareció, corregirlo en el worktree antes de cerrar.
 
 ## Push al fork
 
@@ -151,5 +222,5 @@ Mismo tratamiento de conflictos. Así cada branch queda sobre la última base.
 
 - El **primer** merge es el más grande: acumula toda la divergencia (1313+ commits de upstream contra 3300+ líneas locales). Los siguientes son incrementales.
 - Los conflictos de `cordis.patch.yml` / `package.json` del bundle web-app son los más probables y los que más cuidado requieren (ambos lados agregan filas).
-- Verificar siempre build + tests tras el merge: un sync que rompe el build no es un sync. Los tests los corre el agente; el **build lo verifica el usuario** desde una terminal externa (ver la regla crítica).
-- **El rebuild se auto-sabotea**: correr `pnpm run build` desde el agente mata el proceso que hospeda la sesión. Es el riesgo con peor relación daño/previsibilidad: no falla el build, falla *el entorno del que lo corre*. Preparar y pushear desde el agente; reconstruir desde afuera.
+- Verificar siempre build + tests: un sync que rompe el build no es un sync. Tests en el worktree; el build va en el script de cierre.
+- **Dos auto-sabotajes a evitar**: (1) el merge puede borrar el runtime del agente (`code-runtime-worker-thread` → `ptc-runtime` en 0.1.7) y romper `run_code`; (2) `pnpm run build` desde el principal mata el proceso que hospeda la sesión. El worktree aislado junto con el script de cierre resuelven ambos y evitan depender de una terminal externa.
