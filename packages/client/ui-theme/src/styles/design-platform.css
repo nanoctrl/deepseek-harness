@@ -261,6 +261,12 @@ body {
   --dsw-alias-workspace-tint-red: var(--dsw-static-red-600);
   --dsw-alias-workspace-tint-fuchsia: var(--dsw-static-fuchsia-500);
   --dsw-alias-workspace-tint-deepseek: var(--dsw-static-deepseek-500);
+  --dsw-alias-workspace-tint-sky: var(--dsw-static-blue-300);
+  --dsw-alias-workspace-tint-navy: var(--dsw-static-blue-800);
+  --dsw-alias-workspace-tint-lime: var(--dsw-static-green-400);
+  --dsw-alias-workspace-tint-orange: var(--dsw-static-amber-600);
+  --dsw-alias-workspace-tint-coral: var(--dsw-static-red-400);
+  --dsw-alias-workspace-tint-lavender: var(--dsw-static-deepseek-300);
   --dsw-alias-toast-bg: var(--dsw-static-neutral-bluish-800);
   --dsw-alias-tooltip-bg: var(--dsw-static-neutral-bluish-850);
   --dsw-specific-bubble-highlight: var(--dsw-static-deepseek-200);
@@ -374,6 +380,12 @@ body[data-ds-dark-theme] {
   --dsw-alias-workspace-tint-red: var(--dsw-static-red-400);
   --dsw-alias-workspace-tint-fuchsia: var(--dsw-static-fuchsia-500);
   --dsw-alias-workspace-tint-deepseek: var(--dsw-static-deepseek-400);
+  --dsw-alias-workspace-tint-sky: var(--dsw-static-blue-300);
+  --dsw-alias-workspace-tint-navy: var(--dsw-static-blue-600);
+  --dsw-alias-workspace-tint-lime: var(--dsw-static-green-400);
+  --dsw-alias-workspace-tint-orange: var(--dsw-static-amber-500);
+  --dsw-alias-workspace-tint-coral: var(--dsw-static-red-400);
+  --dsw-alias-workspace-tint-lavender: var(--dsw-static-deepseek-300);
   --dsw-alias-toast-bg: var(--dsw-static-neutral-bluish-750);
   --dsw-alias-tooltip-bg: var(--dsw-static-neutral-bluish-750);
   --dsw-specific-bubble-highlight: var(--dsw-static-neutral-bluish-750);

@@ -11,7 +11,14 @@
  * `--dsw-alias-workspace-tint-*` token. `default` keeps the Theme's own folder
  * color and is stored as the absence of a row.
  */
-export type WorkspaceColor = 'default' | 'blue' | 'green' | 'amber' | 'red' | 'fuchsia' | 'deepseek'
+export type WorkspaceColor =
+  | 'default'
+  | 'blue' | 'sky' | 'navy'
+  | 'green' | 'lime'
+  | 'amber' | 'orange'
+  | 'red' | 'coral'
+  | 'fuchsia'
+  | 'deepseek' | 'lavender'
 
 /** Every stored tint, keyed by Workspace id. Workspaces without a row are `default`. */
 export interface WorkspaceColorMap {

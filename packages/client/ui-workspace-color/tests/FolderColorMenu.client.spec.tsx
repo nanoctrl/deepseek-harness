@@ -56,7 +56,10 @@ const labels = (): Array<string | null> => screen.getAllByRole('menuitem').map(r
 describe('FolderColorMenu', () => {
   it('lists every tint with the reset last', () => {
     mount('blue')
-    expect(labels()).toEqual(['Blue', 'Green', 'Amber', 'Red', 'Fuchsia', 'DeepSeek', 'Default'])
+    expect(labels()).toEqual([
+      'Blue', 'Sky', 'Navy', 'Green', 'Lime', 'Amber', 'Orange',
+      'Red', 'Coral', 'Fuchsia', 'DeepSeek', 'Lavender', 'Default',
+    ])
   })
 
   it('rings only the tint the workspace already carries', () => {

@@ -9,7 +9,13 @@ import type { WorkspaceColor } from './types.ts'
 
 /** Every tint the registry accepts; the array is the single source of the set. */
 export const WORKSPACE_COLORS = [
-  'default', 'blue', 'green', 'amber', 'red', 'fuchsia', 'deepseek',
+  'default',
+  'blue', 'sky', 'navy',
+  'green', 'lime',
+  'amber', 'orange',
+  'red', 'coral',
+  'fuchsia',
+  'deepseek', 'lavender',
 ] as const satisfies readonly WorkspaceColor[]
 
 /** One stored tint. */
