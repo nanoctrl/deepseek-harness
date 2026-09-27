@@ -29,13 +29,13 @@ describe('WorkspaceColorGateway', () => {
 
   it('stores each tint as its own durable row', async () => {
     const h = await harness()
-    await h.gateway.set({ workspaceId: 'w1', color: 'blue' })
-    await h.gateway.set({ workspaceId: 'w2', color: 'fuchsia' })
+    await h.gateway.set({ workspaceId: 'w1', color: 'red' })
+    await h.gateway.set({ workspaceId: 'w2', color: 'purple' })
 
-    expect(await h.gateway.all()).toEqual({ colors: { w1: 'blue', w2: 'fuchsia' } })
+    expect(await h.gateway.all()).toEqual({ colors: { w1: 'red', w2: 'purple' } })
     // Durability, not caching: the rows are what the medium holds.
-    expect(h.pool.media.get('workspace_color')?.tables.get('colors')?.get('w1')).toBe('blue')
-    expect(h.pool.media.get('workspace_color')?.tables.get('colors')?.get('w2')).toBe('fuchsia')
+    expect(h.pool.media.get('workspace_color')?.tables.get('colors')?.get('w1')).toBe('red')
+    expect(h.pool.media.get('workspace_color')?.tables.get('colors')?.get('w2')).toBe('purple')
   })
 
   it('clears the row when the tint returns to default', async () => {

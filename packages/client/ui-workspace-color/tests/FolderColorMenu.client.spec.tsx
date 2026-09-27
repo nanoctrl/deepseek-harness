@@ -57,16 +57,20 @@ describe('FolderColorMenu', () => {
   it('lists every tint with the reset last', () => {
     mount('blue')
     expect(labels()).toEqual([
-      'Blue', 'Sky', 'Navy', 'Green', 'Lime', 'Amber', 'Orange',
-      'Red', 'Coral', 'Fuchsia', 'DeepSeek', 'Lavender', 'Default',
+      'Red', 'Pink', 'Purple', 'Indigo',
+      'Blue', 'Cyan', 'Teal',
+      'Green', 'Lime',
+      'Yellow', 'Orange', 'Deep Orange',
+      'Brown', 'Blue Grey',
+      'Default',
     ])
   })
 
   it('rings only the tint the workspace already carries', () => {
-    mount('amber')
+    mount('green')
     const marked = screen.getAllByRole('menuitem')
       .filter(row => row.querySelector('[class*="swatchCurrent"]') !== null)
-    expect(marked.map(row => row.textContent)).toEqual(['Amber'])
+    expect(marked.map(row => row.textContent)).toEqual(['Green'])
   })
 
   it('rings nothing when the workspace carries no tint', () => {
@@ -77,8 +81,8 @@ describe('FolderColorMenu', () => {
 
   it('writes the picked tint for this workspace', () => {
     const setColor = mount('blue')
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Fuchsia' }))
-    expect(setColor).toHaveBeenCalledWith('w1', 'fuchsia')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Cyan' }))
+    expect(setColor).toHaveBeenCalledWith('w1', 'cyan')
   })
 
   it('writes the reset as default', () => {

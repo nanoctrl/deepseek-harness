@@ -13,12 +13,11 @@
  */
 export type WorkspaceColor =
   | 'default'
-  | 'blue' | 'sky' | 'navy'
+  | 'red' | 'pink' | 'purple' | 'indigo'
+  | 'blue' | 'cyan' | 'teal'
   | 'green' | 'lime'
-  | 'amber' | 'orange'
-  | 'red' | 'coral'
-  | 'fuchsia'
-  | 'deepseek' | 'lavender'
+  | 'yellow' | 'orange' | 'deeporange'
+  | 'brown' | 'bluegrey'
 
 /** Every stored tint, keyed by Workspace id. Workspaces without a row are `default`. */
 export interface WorkspaceColorMap {
