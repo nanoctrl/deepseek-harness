@@ -77,6 +77,12 @@ export interface GroupNode {
   /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
   createdAt: number | undefined
   label: string
+  /**
+   * Folder tint contributed for this Workspace by the workspace-color plugin,
+   * as a CSS color value; absent keeps the theme's own folder color. Supplied
+   * here so the renderer never reaches a service.
+   */
+  color?: string | undefined
   /** Total visible sessions in the group. */
   sessionCount: number
   expanded: boolean
@@ -126,6 +132,8 @@ interface Group {
   cwd: string | undefined
   createdAt: number | undefined
   label: string
+  /** Folder tint contributed for this Workspace; absent keeps the theme color. */
+  color: string | undefined
   sessions: SessionSummary[]
 }
 
@@ -315,8 +323,9 @@ function buildGroup(
   createdAt: number | undefined,
   label: string,
   members: readonly SessionSummary[],
+  color?: string,
 ): Group {
-  return { key, workspaceId, cwd, createdAt, label, sessions: [...members] }
+  return { key, workspaceId, cwd, createdAt, label, color, sessions: [...members] }
 }
 
 /** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
@@ -348,6 +357,7 @@ function groupByWorkspace(
   archived: ReadonlySet<SessionId>,
   archivedFilter: ArchivedFilter,
   ungroupedOrder: readonly string[] | undefined,
+  tints: Readonly<Record<string, string>>,
 ): Group[] {
   const current = mainSessionId(list)
   const groups: Group[] = []
@@ -363,7 +373,7 @@ function groupByWorkspace(
     }
     groups.push(buildGroup(
       workspace.workspaceId, workspace.workspaceId, workspace.path,
-      Date.parse(workspace.createdAt), workspace.title, members,
+      Date.parse(workspace.createdAt), workspace.title, members, tints[workspace.workspaceId],
     ))
   }
   const stray = list.ids
@@ -456,6 +466,7 @@ export function deriveGroups(
   rowState: SessionRowState,
   statuses: SessionStatuses,
   view: TreeView,
+  tints: Readonly<Record<string, string>> = {},
 ): GroupNode[] {
   const archived = new Set(rowState.archivedSessionIds)
   const pinned = new Set(rowState.pinnedSessionIds)
@@ -465,7 +476,7 @@ export function deriveGroups(
     ? undefined
     : owningGroupKey(workspaces, current)
   const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder)) {
+  for (const g of groupByWorkspace(list, workspaces, archived, rowState.archivedFilter, view.ungroupedOrder, tints)) {
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,
@@ -473,6 +484,7 @@ export function deriveGroups(
       cwd: g.cwd,
       createdAt: g.createdAt,
       label: g.label,
+      color: g.color,
       sessionCount: g.sessions.length,
       expanded,
       containsCurrent: g.key === currentGroup,

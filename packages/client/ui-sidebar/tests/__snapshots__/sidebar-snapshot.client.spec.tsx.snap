@@ -138,7 +138,7 @@ exports[`sidebar shell snapshots > renders Windows caption controls in expanded 
                 <span
                   class="buildVersion"
                 >
-                  1.2.3-rc.4-abc1234-dirty
+                  fork · 1.2.3-rc.4-abc1234-dirty
                 </span>
               </span>
             </div>

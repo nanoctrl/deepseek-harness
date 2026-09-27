@@ -153,6 +153,12 @@
     - id: delete-session
       name: '@deepseek-ai/dsh-host-delete-session'
 
+    # Per-workspace folder tint: hosts the workspaceColor Remote the sidebar
+    # folder menu writes and the workspace row reads. Kept in its own storage
+    # domain so the tint survives a reload without a Workspace record field.
+    - id: workspace-color
+      name: '@deepseek-ai/dsh-host-workspace-color'
+
     # ── layer 2: transport/service ──────────────────────────────────────────────
 
     # Plain route-registration carrier; host and port come from the app's
@@ -373,6 +379,11 @@
     # deleteSession Remote.
     - id: ui-delete-session
       name: '@deepseek-ai/dsh-client-ui-delete-session'
+
+    # Workspace folder tint: the tint rows in a Workspace header menu, over the
+    # workspaceColor Remote and the `sidebar.workspaces.row.menu.item` slot.
+    - id: ui-workspace-color
+      name: '@deepseek-ai/dsh-client-ui-workspace-color'
 
 
     # Goal surface: GoalBar in the input dock over the goal session projection.

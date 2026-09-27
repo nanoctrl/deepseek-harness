@@ -179,17 +179,43 @@ Confirmar que cada feature propia del fork siga **cableada**, no sólo que el pa
 
 ```sh
 # 1. paquetes propios presentes
-ls packages/host/voice-dictation packages/host/delete-session \
-   packages/client/ui-voice-dictation packages/client/ui-delete-session
+ls packages/host/voice-dictation packages/host/delete-session packages/host/workspace-color \
+   packages/client/ui-voice-dictation packages/client/ui-delete-session packages/client/ui-workspace-color
 
 # 2. anclajes de registro (lo que el merge suele pisar)
-grep -n 'voice-dictation\|delete-session' packages/bundle/web-app/cordis.patch.yml
-grep -n 'voice-dictation\|delete-session' packages/bundle/web-app/package.json packages/api/remotes/package.json
-grep -n 'voiceTranscribeRemote\|deleteSessionRemote' packages/api/remotes/src/client/index.ts
+grep -n 'voice-dictation\|delete-session\|workspace-color' packages/bundle/web-app/cordis.patch.yml
+grep -n 'voice-dictation\|delete-session\|workspace-color' packages/bundle/web-app/package.json packages/api/remotes/package.json
+grep -n 'voiceTranscribeRemote\|deleteSessionRemote\|workspaceColorRemote' packages/api/remotes/src/client/index.ts
 grep -rn 'StateDot' packages/client/ui-workspace/src/client/rows/*.tsx
+
+# 3. enganches del color de carpeta dentro de ui-workspace (ver abajo)
+grep -n 'sidebar.workspaces.row.menu.item' packages/client/ui-workspace/src/client/contract/slots.ts \
+   packages/client/ui-workspace/src/client/index.ts packages/client/ui-workspace/src/client/rows/Rows.tsx
+grep -n 'folderTinted' packages/client/ui-workspace/src/client/rows/Rows.module.css
+grep -n 'rowTints' packages/client/ui-workspace/src/client/contract/slots.ts \
+   packages/client/ui-workspace/src/client/index.ts packages/client/ui-workspace/src/client/rows/WorkspaceBrowser.tsx
+grep -n 'color' packages/client/ui-workspace/src/client/tree.ts
+grep -c 'dsw-alias-workspace-tint-' packages/client/ui-theme/src/styles/design-platform.css
+grep -n 'workspaceColor/all' packages/test-support/client-runtime/src/assembly/remote-default-responses.ts
 ```
 
 Un paquete puede existir y **no estar cableado**: si el merge pisó un registro, la feature desaparece del GUI sin error de compilación. Revisar los anclajes, no sólo la existencia.
+
+### El color de carpeta es la única feature con enganches en upstream
+
+`ui-workspace` es upstream y dibuja tanto la fila del workspace como su menú; ninguno de los dos tiene extension point, así que el color de carpeta deja ahí **cinco enganches chicos y genéricos**. La lógica — persistencia y Remote propios (`dsh-host-workspace-color`), paleta, componentes y textos (`dsh-client-ui-workspace-color`) — vive en paquetes propios, así que un merge que toque `ui-workspace` sólo puede romper los enganches, nunca la feature.
+
+Cuando el merge toque `packages/client/ui-workspace/` o `ui-theme`, revisar que sobrevivan:
+
+- el slot hijo `'sidebar.workspaces.row.menu.item'` en los `children` del registro `sidebar.workspaces` (`ui-workspace/src/client/index.ts`) y en el `SlotMap` (`contract/slots.ts`);
+- el hook `rowTints` en `WorkspaceBrowserInjected.hooks`, en el `hooks` del `browserInjected`, y en `SessionTreeProps`;
+- `GroupNode.color` y su propagación en `tree.ts` (`deriveGroups` → `groupByWorkspace` → `buildGroup`);
+- `.folderTinted` en `Rows.module.css` (entre `.folderActive` y `.folderRunning`) y su uso en `ProjectRowItem`;
+- el render del slot como `children` del `Menu` de la fila del workspace, en `Rows.tsx`;
+- los 6 alias `--dsw-alias-workspace-tint-*` en `design-platform.css`, en los dos bloques (claro y oscuro);
+- la respuesta por defecto `'workspaceColor/all'` en `packages/test-support/client-runtime/src/assembly/remote-default-responses.ts`: ese harness declara cada endpoint que el assembly llama al arrancar, y sin la fila los specs que lo usan fallan con `remote-mock: unmatched request`.
+
+Si el merge reescribió `Rows.tsx` o `WorkspaceBrowser.tsx` y el slot desapareció, el síntoma es silencioso: el menú del workspace pierde la sección de color y el icono queda sin tinte, **sin error de compilación**. Los `grep` de arriba son la verificación.
 
 Si algo falla o un anclaje desapareció, corregirlo en el worktree antes de cerrar.
 

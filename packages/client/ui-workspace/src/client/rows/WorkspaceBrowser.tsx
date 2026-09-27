@@ -218,7 +218,14 @@ type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessionStatus' | 'startSession' | 'open'
   | 'insertWorkspaceBefore' | 't' | 'usePanelInfo'
-> & PropsRenderSlots<'sidebar.workspaces.session.menu.item' | 'sidebar.workspaces.session.row.action'> & {
+> & PropsRenderSlots<
+  'sidebar.workspaces.session.menu.item' | 'sidebar.workspaces.session.row.action' | 'sidebar.workspaces.row.menu.item'
+> & {
+  /**
+   * Folder tints contributed by the optional workspace-color plugin, keyed by
+   * Workspace id; absent entries keep the theme's own folder color.
+   */
+  rowTints: Readonly<Record<string, string>>
   /** Always-mounted Session list snapshot. */
   list: SessionListState
   /** Host account home for POSIX hover-path abbreviation. */
@@ -261,7 +268,7 @@ function SessionTree({
   rowState,
   workspaceReady, animationResetKey, usePanelInfo,
   onRenameRequest, onDeleteRequest, onSessionRenameRequest,
-  renderSlot, renderSessionActions,
+  renderSlot, renderSessionActions, rowTints,
   insertWorkspaceBefore,
   nestWorkspaces, groupExpansion, setGroupExpanded,
   setSessionOrder, home, t,
@@ -315,8 +322,8 @@ function SessionTree({
     () => deriveGroups(list, workspaces, rowState, statuses, {
       expandedGroups,
       ungroupedOrder: ungroupedSessionIds,
-    }),
-    [list, workspaces, rowState, statuses, expandedGroups, ungroupedSessionIds],
+    }, rowTints),
+    [list, workspaces, rowState, statuses, expandedGroups, ungroupedSessionIds, rowTints],
   )
   useEffect(() => {
     for (let key = revealGroup; key !== undefined; key = parents.get(key)) {
@@ -470,6 +477,7 @@ function SessionTree({
         <ProjectRowItem
           group={group}
           containsCurrentDescendant={currentAncestors.has(group.key)}
+          renderSlot={renderSlot}
           home={home}
           t={t}
           onToggle={() => {
@@ -834,10 +842,14 @@ export function WorkspaceBrowser({
   searchResultLimit,
   useDirectoryFlow,
   useHostInfo,
+  useRowTints,
   renderSlot,
   t,
 }: WorkspaceBrowserProps) {
   const home = useHostInfo(info => info.home)
+  // Tints contributed by the optional workspace-color plugin; an empty map
+  // leaves every row on the theme folder color.
+  const rowTints = useRowTints(tints => tints)
   // Ordering remains live while the rail or search replaces the list body.
   const list = useSessions(state => state)
   const workspaces = useWorkspaces(state => state.items)
@@ -1342,6 +1354,7 @@ export function WorkspaceBrowser({
                 revealSessionId={revealSessionId}
                 onSessionRevealed={acknowledgeSessionReveal}
                 home={home}
+                rowTints={rowTints}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {
                   setRenameTarget({ workspaceId, currentTitle })

@@ -81,6 +81,7 @@
     { "path": "./packages/client/ui-sidebar" },
     { "path": "./packages/client/ui-voice-dictation" },
     { "path": "./packages/client/ui-delete-session" },
+    { "path": "./packages/client/ui-workspace-color" },
     { "path": "./packages/client/ui-brand-official" },
     { "path": "./packages/client/ui-approval" },
     { "path": "./packages/client/ui-chat/tsconfig.client.json" },

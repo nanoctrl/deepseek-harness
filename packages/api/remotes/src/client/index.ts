@@ -11,6 +11,7 @@ import llmRemote from '@deepseek-ai/dsh-llm/remote'
 import dynamicRemote from '@deepseek-ai/dsh-cordis-host-runner/remote'
 import deleteSessionRemote from '@deepseek-ai/dsh-host-delete-session/remote'
 import voiceTranscribeRemote from '@deepseek-ai/dsh-host-voice-dictation/remote'
+import workspaceColorRemote from '@deepseek-ai/dsh-host-workspace-color/remote'
 import pluginManagerRemote from '@deepseek-ai/dsh-plugin-manager/remote'
 import pluginRegistryProbeRemote from '@deepseek-ai/dsh-client-ui-plugin-manager/remote'
 import pluginInventoryRemote from '@deepseek-ai/dsh-host-plugin-inventory/remote'
@@ -49,6 +50,7 @@ export type {} from '@deepseek-ai/dsh-llm/remote'
 export type {} from '@deepseek-ai/dsh-host-plugin-inventory/remote'
 export type {} from '@deepseek-ai/dsh-host-delete-session/remote'
 export type {} from '@deepseek-ai/dsh-host-voice-dictation/remote'
+export type {} from '@deepseek-ai/dsh-host-workspace-color/remote'
 export type {} from '@deepseek-ai/dsh-message-feedback/remote'
 export type {} from '@deepseek-ai/dsh-permission-presets/remote'
 export type {} from '@deepseek-ai/dsh-command-feedback/remote'
@@ -180,7 +182,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
   try {
     for (const contribution of [
       agentPresetsRemote, commandsRemote, settingsControllerRemote, accountRemote, goalsRemote, llmRemote, dynamicRemote,
-      deleteSessionRemote, voiceTranscribeRemote,
+      deleteSessionRemote, voiceTranscribeRemote, workspaceColorRemote,
       pluginInventoryRemote, pluginManagerRemote, pluginRegistryProbeRemote, messageFeedbackRemote, sessionFeedbackRemote,
       fileUploadsRemote, sessionReferencesRemote,
       permissionPresetsRemote, subagentsRemote, sessionRemote, jobRemote, workspaceRemote, workspaceFilesRemote, terminalRemote,

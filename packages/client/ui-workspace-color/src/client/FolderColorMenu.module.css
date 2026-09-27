@@ -1,0 +1,20 @@
+/* Legend opening the tint rows: the menu owns row styling, this is only a heading. */
+.legend {
+  padding: 6px 12px 2px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* One tint preview. The dot rides the tint token the row passes inline. */
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--tint, var(--dsw-alias-state-idle-primary));
+}
+
+/* The tint already applied to this Workspace. */
+.swatchCurrent {
+  box-shadow: 0 0 0 2px var(--dsw-alias-label-primary);
+}

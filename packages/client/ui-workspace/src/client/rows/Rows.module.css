@@ -138,6 +138,13 @@
   color: var(--dsw-alias-state-business-primary);
 }
 
+/* Tint chosen for this Workspace: an explicit choice wins over the active tint,
+   while live activity (the rule below) still wins over both. The value arrives
+   as the row's own --folder-tint custom property. */
+.folderTinted {
+  color: var(--folder-tint);
+}
+
 /* Activity: the folder itself blinks in the activity color while any session runs. */
 .folderRunning {
   color: var(--dsw-alias-state-ongoing-primary);

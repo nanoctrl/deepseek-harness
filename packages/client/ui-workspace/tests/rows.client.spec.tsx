@@ -12,7 +12,7 @@ import type { MenuOpenState, SessionRowOwnerProps } from '../src/client/contract
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
 import {
-  ProjectRowItem, SearchResultItem, SessionNodeItem as SessionNodeItemComponent,
+  ProjectRowItem as ProjectRowItemComponent, SearchResultItem, SessionNodeItem as SessionNodeItemComponent,
 } from '../src/client/rows/Rows.tsx'
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
 import { en, zh } from '../src/client/locales.ts'
@@ -25,10 +25,14 @@ const tEn = makeTranslate(en, commonEn) as never
 const sid = (id: string) => id as SessionId
 const wid = (id: string) => id as WorkspaceId
 
-/** The two row lists a Session row renders. */
-type RowSlotName = 'sidebar.workspaces.session.menu.item' | 'sidebar.workspaces.session.row.action'
+/** The row lists a browser row renders: two per Session, one per Workspace header. */
+type RowSlotName =
+  | 'sidebar.workspaces.session.menu.item'
+  | 'sidebar.workspaces.session.row.action'
+  | 'sidebar.workspaces.row.menu.item'
 type RowRenderSlot = PropsRenderSlots<RowSlotName>['renderSlot']
 type SessionNodeItemProps = ComponentProps<typeof SessionNodeItemComponent>
+type ProjectRowItemProps = ComponentProps<typeof ProjectRowItemComponent>
 
 const renderNoRowEntries: RowRenderSlot = () => null
 
@@ -37,6 +41,13 @@ function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = ()
   SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'
 > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest'>>) {
   return <SessionNodeItemComponent {...props} renderSlot={renderSlot} onRenameRequest={onRenameRequest} />
+}
+
+// The Workspace header row takes the same empty-by-default Slot share.
+function ProjectRowItem({ renderSlot = renderNoRowEntries, ...props }: Omit<
+  ProjectRowItemProps, 'renderSlot'
+> & Partial<Pick<ProjectRowItemProps, 'renderSlot'>>) {
+  return <ProjectRowItemComponent {...props} renderSlot={renderSlot} />
 }
 
 /** Half detection reads the row rect; jsdom rects are all-zero by default. */

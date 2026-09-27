@@ -11,7 +11,7 @@
  * session and workspace hover cards are suppressed while a menu is open.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode, RefObject } from 'react'
+import type { CSSProperties, ReactNode, RefObject } from 'react'
 import clsx from 'clsx'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
@@ -201,7 +201,7 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, containsCurrentDescendant = false, onToggle, onCreate, actions, drag, home, t }: {
+export function ProjectRowItem({ group, containsCurrentDescendant = false, onToggle, onCreate, actions, renderSlot, drag, home, t }: {
   group: GroupNode
   containsCurrentDescendant?: boolean
   onToggle: () => void
@@ -213,7 +213,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
   /** Host account home; POSIX home-rooted hover paths display as `~`. */
   home?: string | undefined
   t: RowTranslate
-}) {
+} & PropsRenderSlots<'sidebar.workspaces.row.menu.item'>) {
   const row = group
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
@@ -240,7 +240,13 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
         }}
       onDragEnd={drag?.end}
     >
-      <span className={clsx(css.slot, css.folder, active && css.folderActive, row.hasActivity && css.folderRunning)}>
+      <span
+        className={clsx(
+          css.slot, css.folder, active && css.folderActive, row.hasActivity && css.folderRunning,
+          row.color !== undefined && css.folderTinted,
+        )}
+        style={row.color === undefined ? undefined : { '--folder-tint': row.color } as CSSProperties}
+      >
         {row.expanded ? <IconFolderOpenRegular /> : <IconFolderCloseRegular />}
       </span>
       <span className={clsx(css.slot, css.chevron)}>
@@ -276,7 +282,13 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
                 <IconEllipsisOutlineRegular />
               </button>
             )}
-          />
+          >
+            {group.workspaceId !== undefined && renderSlot('sidebar.workspaces.row.menu.item', {
+              workspaceId: group.workspaceId,
+              title: label,
+              color: row.color,
+            })}
+          </Menu>
         )}
         <Tooltip label={t('actions.newSession')} side="bottom" align="end" delayMs={500}>
           <button
@@ -652,7 +664,7 @@ export function SessionNodeItem({
           <Menu
             open={menuOpen}
             onClose={() => { setMenuOpen(false) }}
-            footerNode={renderSessionActions === undefined || row.blank
+            footerNode={renderSessionActions === undefined
               ? undefined
               : renderSessionActions({
                 sessionId: node.id,

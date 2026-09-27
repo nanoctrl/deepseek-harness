@@ -28,6 +28,16 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-host-voice-dictation": ["./packages/host/voice-dictation/src/index.ts"],
+      "@deepseek-ai/dsh-host-delete-session": ["./packages/host/delete-session/src/index.ts"],
+      "@deepseek-ai/dsh-host-workspace-color": ["./packages/host/workspace-color/src/index.ts"],
+      "@deepseek-ai/dsh-host-workspace-color/types": ["./packages/host/workspace-color/src/types.ts"],
+      "@deepseek-ai/dsh-client-ui-voice-dictation": ["./packages/client/ui-voice-dictation/src/index.ts"],
+      "@deepseek-ai/dsh-client-ui-voice-dictation/client": ["./packages/client/ui-voice-dictation/src/client/index.ts"],
+      "@deepseek-ai/dsh-client-ui-delete-session": ["./packages/client/ui-delete-session/src/index.ts"],
+      "@deepseek-ai/dsh-client-ui-delete-session/client": ["./packages/client/ui-delete-session/src/client/index.ts"],
+      "@deepseek-ai/dsh-client-ui-workspace-color": ["./packages/client/ui-workspace-color/src/index.ts"],
+      "@deepseek-ai/dsh-client-ui-workspace-color/client": ["./packages/client/ui-workspace-color/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-settings-account": ["./packages/client/ui-settings-account/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-settings-account/client": ["./packages/client/ui-settings-account/src/client/index.ts"],
       "@deepseek-ai/dsh-api-gateway/stream-protocol": ["./packages/api/gateway/src/stream-protocol.ts"],

@@ -153,7 +153,27 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * handling to keep the row from opening.
      */
     'sidebar.workspaces.session.row.action': { kind: 'list'; scope: 'root'; owner: SessionRowOwnerProps }
+    /**
+     * The rows of one Workspace header's "..." menu, in ascending `order`,
+     * after the shipped rename and delete rows. Each entry renders one
+     * `role="menuitem"` `<button>` — ui-primitives' `MenuItemButton` adds the
+     * host styling and `separatorBefore` — and the list's keyboard walk and
+     * focus return read the DOM, so any such button joins them. A contributing
+     * package owns its own state and reaches its own Host Remote; the owner
+     * share carries the row identity and the tint already applied to it.
+     */
+    'sidebar.workspaces.row.menu.item': { kind: 'list'; scope: 'root'; owner: WorkspaceRowOwnerProps }
   }
+}
+
+/** Owner share of one Workspace header menu occurrence: the row the entries belong to. */
+export interface WorkspaceRowOwnerProps {
+  /** The Workspace the row shows. */
+  workspaceId: WorkspaceId
+  /** Row label (the Workspace title). */
+  title: string
+  /** Folder tint applied to this row as a CSS color value; absent keeps the theme's own folder color. */
+  color?: string | undefined
 }
 
 /** Owner share of one session row's action-menu footer. */
@@ -202,6 +222,12 @@ export type WorkspaceBrowserInjected = {
      * saw. Select the field the surface needs (`info => info.home`).
      */
     hostInfo: HostObservable<RemoteHostFacts>
+    /**
+     * Folder tints contributed by the optional workspace-color plugin, keyed by
+     * Workspace id and valued with the CSS color each row paints. Empty when
+     * that plugin is not installed, which leaves every row on the theme color.
+     */
+    rowTints: HostObservable<Readonly<Record<string, string>>>
   }
   /**
    * Start a New Session in a Workspace: reuse-or-create its blank session and

@@ -57,6 +57,32 @@ export type {
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
+/**
+ * Folder tints published by the optional workspace-color plugin, which
+ * registers them as the `workspaceColorTints` Cordis service. Reading them by
+ * service name keeps the edge one way: that plugin knows this package's slot
+ * contract, never the reverse.
+ */
+interface RowTintService {
+  /**
+   * Current tint per Workspace id.
+   * @returns tints by Workspace id; untinted workspaces are absent.
+   */
+  snapshot(): Readonly<Record<string, string>>
+  /**
+   * Observe tint changes.
+   * @param listener - called after every published change.
+   * @returns unsubscribe.
+   */
+  subscribe(listener: () => void): () => void
+}
+
+/** Stable empty snapshot: the identity an unoccupied tint source must keep. */
+const EMPTY_ROW_TINTS: Readonly<Record<string, string>> = {}
+
+/** Stable no-op unsubscribe for the unoccupied tint source. */
+const NO_UNSUBSCRIBE = (): void => {}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface GlobalStandardProps {
     /** Selector hook over the pure Workspace Controller snapshot. */
@@ -130,6 +156,14 @@ export function apply(ctx: Context): void {
   const hostInfo: HostObservable<RemoteHostFacts> = {
     getSnapshot: () => ctx.remote.$host,
     subscribe: listener => ctx.on('connection/reset', listener),
+  }
+  // Resolved per call, not captured: the contributing plugin may activate after
+  // this apply, and the source must still see it on the next read.
+  const rowTintService = (): RowTintService | undefined =>
+    ctx.get('workspaceColorTints') as RowTintService | undefined
+  const rowTintsSource: HostObservable<Readonly<Record<string, string>>> = {
+    getSnapshot: () => rowTintService()?.snapshot() ?? EMPTY_ROW_TINTS,
+    subscribe: listener => rowTintService()?.subscribe(listener) ?? NO_UNSUBSCRIBE,
   }
   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
   const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {
@@ -235,7 +269,7 @@ export function apply(ctx: Context): void {
     },
     unarchiveSession: async (sessionId) => { await uiWorkspace.unarchiveSession(sessionId) },
     createWorkspace: input => workspaces.create(input),
-    hooks: { directoryFlow: browserFlowSource, hostInfo },
+    hooks: { directoryFlow: browserFlowSource, hostInfo, rowTints: rowTintsSource },
   })
   const pickerInjected = (): WorkspacePickerInjected => ({
     createWorkspace: input => workspaces.create(input),
@@ -256,6 +290,9 @@ export function apply(ctx: Context): void {
           kind: 'list', scope: 'root', inject: { hooks: { menuOpenState: menuOpenStateFactory } },
         },
         'sidebar.workspaces.session.row.action': { kind: 'list', scope: 'root' },
+        // Workspace header menu rows contributed by other packages (the folder
+        // tint of the optional workspace-color plugin is the first occupant).
+        'sidebar.workspaces.row.menu.item': { kind: 'list', scope: 'root' },
       },
       store: viewStore,
       inject: browserInjected,
