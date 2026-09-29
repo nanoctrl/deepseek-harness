@@ -9,9 +9,11 @@ import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import WorkspaceColorGateway from '../src/index.ts'
 
-/** Boot the storage/domain composition the gateway opens its tint domain through. */
-async function harness() {
-  const pool = new MemoryMediaPool()
+/**
+ * Boot the storage/domain composition the gateway opens its tint domain
+ * through. Reusing a pool models a restart: the medium outlives the process.
+ */
+async function harness(pool: MemoryMediaPool = new MemoryMediaPool()) {
   const ctx = new Context()
   await ctx.plugin(Storage)
   ctx.storage.backend.register('memory', new MemoryStorageBackend(pool))
@@ -36,6 +38,17 @@ describe('WorkspaceColorGateway', () => {
     // Durability, not caching: the rows are what the medium holds.
     expect(h.pool.media.get('workspace_color')?.tables.get('colors')?.get('w1')).toBe('red')
     expect(h.pool.media.get('workspace_color')?.tables.get('colors')?.get('w2')).toBe('purple')
+  })
+
+  it('survives a restart: a fresh composition reads what the previous one wrote', async () => {
+    const pool = new MemoryMediaPool()
+    const first = await harness(pool)
+    await first.gateway.set({ workspaceId: 'w1', color: 'teal' })
+    await first.gateway.set({ workspaceId: 'w2', color: 'brown' })
+    await first.ctx.fiber.dispose()
+
+    const restarted = await harness(pool)
+    expect(await restarted.gateway.all()).toEqual({ colors: { w1: 'teal', w2: 'brown' } })
   })
 
   it('clears the row when the tint returns to default', async () => {
