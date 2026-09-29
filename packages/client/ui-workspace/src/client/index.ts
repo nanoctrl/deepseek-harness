@@ -57,32 +57,6 @@ export type {
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
-/**
- * Folder tints published by the optional workspace-color plugin, which
- * registers them as the `workspaceColorTints` Cordis service. Reading them by
- * service name keeps the edge one way: that plugin knows this package's slot
- * contract, never the reverse.
- */
-interface RowTintService {
-  /**
-   * Current tint per Workspace id.
-   * @returns tints by Workspace id; untinted workspaces are absent.
-   */
-  snapshot(): Readonly<Record<string, string>>
-  /**
-   * Observe tint changes.
-   * @param listener - called after every published change.
-   * @returns unsubscribe.
-   */
-  subscribe(listener: () => void): () => void
-}
-
-/** Stable empty snapshot: the identity an unoccupied tint source must keep. */
-const EMPTY_ROW_TINTS: Readonly<Record<string, string>> = {}
-
-/** Stable no-op unsubscribe for the unoccupied tint source. */
-const NO_UNSUBSCRIBE = (): void => {}
-
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface GlobalStandardProps {
     /** Selector hook over the pure Workspace Controller snapshot. */
@@ -157,13 +131,18 @@ export function apply(ctx: Context): void {
     getSnapshot: () => ctx.remote.$host,
     subscribe: listener => ctx.on('connection/reset', listener),
   }
-  // Resolved per call, not captured: the contributing plugin may activate after
-  // this apply, and the source must still see it on the next read.
-  const rowTintService = (): RowTintService | undefined =>
-    ctx.get('workspaceColorTints') as RowTintService | undefined
+  // Folder tints for the Workspace rows (CSS color values, keyed by Workspace
+  // id). ui-workspace owns the store, so a row repaints from a write without
+  // this apply having to resolve another plugin's service before it mounts:
+  // the optional workspace-color plugin writes here through the
+  // `workspaceRowTints` service, which exists from this apply onward.
+  const rowTintsStore = createSnapshotStore<Readonly<Record<string, string>>>({})
+  ctx.effect(() => ctx.provide('workspaceRowTints', {
+    set: (next: Readonly<Record<string, string>>): void => { rowTintsStore.set(next) },
+  }), 'ui-workspace: row tints')
   const rowTintsSource: HostObservable<Readonly<Record<string, string>>> = {
-    getSnapshot: () => rowTintService()?.snapshot() ?? EMPTY_ROW_TINTS,
-    subscribe: listener => rowTintService()?.subscribe(listener) ?? NO_UNSUBSCRIBE,
+    getSnapshot: () => rowTintsStore.getSnapshot(),
+    subscribe: listener => rowTintsStore.subscribe(listener),
   }
   const pickerFlowSource = flowSource('conversation.hero.workspace.directoryFlow')
   const openSession: WorkspaceBrowserInjected['open'] = (sessionId) => {

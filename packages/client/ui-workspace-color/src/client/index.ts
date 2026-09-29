@@ -10,8 +10,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls ui-workspace's SlotMap merge (the row menu list).
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { WorkspaceColor } from '@deepseek-ai/dsh-host-workspace-color'
 import { FolderColorMenu } from './FolderColorMenu.tsx'
 import type { FolderColorInjected } from './contract/slots.ts'
+import { TINT_TOKEN } from './colors.ts'
 import { en, zh, type WorkspaceColorKey } from './locales.ts'
 
 export type { FolderColorInjected } from './contract/slots.ts'
@@ -28,27 +30,36 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'workspaceColor'
 
 /**
- * Folder tints published for the workspace row's folder glyph. ui-workspace
- * reads this service when the plugin is installed and falls back to an empty
- * map otherwise, so the edge runs one way: this plugin knows ui-workspace's
- * slot contract, never the reverse.
+ * The store ui-workspace repaints its Workspace rows from, reached as the
+ * `workspaceRowTints` service it registers. It takes the CSS color each row
+ * paints, keyed by Workspace id, so the dependency runs one way: this plugin
+ * knows ui-workspace's contract, never the reverse.
  */
-export interface WorkspaceColorTints {
+interface RowTintSink {
   /**
-   * Current tint per Workspace id.
-   * @returns tints by Workspace id; untinted workspaces are absent.
+   * Replace the whole tint map.
+   * @param next - CSS color per Workspace id.
    */
-  snapshot(): Readonly<Record<string, string>>
-  /**
-   * Observe tint changes.
-   * @param listener - called after every published change.
-   * @returns unsubscribe.
-   */
-  subscribe(listener: () => void): () => void
+  set(next: Readonly<Record<string, string>>): void
 }
 
 /** Services required by the workspace-color plugin. */
 export const inject = ['slots', 'locale', 'remote', 'remote.workspaceColor']
+
+/**
+ * Map stored tints to the CSS colors the rows paint. The label is the value
+ * the Host stores; the token is what a folder consumes.
+ * @param colors - stored tint per Workspace id.
+ * @returns the CSS color each Workspace row paints.
+ */
+function toCss(colors: Readonly<Record<string, WorkspaceColor>>): Readonly<Record<string, string>> {
+  const next: Record<string, string> = {}
+  for (const [workspaceId, color] of Object.entries(colors)) {
+    const token = TINT_TOKEN[color]
+    if (token !== undefined) next[workspaceId] = token
+  }
+  return next
+}
 
 /**
  * Publish the tint map and register the folder-tint rows.
@@ -57,41 +68,31 @@ export const inject = ['slots', 'locale', 'remote', 'remote.workspaceColor']
 export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace-color: dictionaries')
 
-  const tints = createSnapshotStore<Readonly<Record<string, string>>>({})
-  let loading: Promise<void> | undefined
-  const loadOnce = (): Promise<void> => {
-    loading ??= ctx.remote.workspaceColor.all().then((result) => {
-      if (result.ok) tints.set(result.value.colors)
-    })
-    return loading
-  }
+  const tints = createSnapshotStore<Readonly<Record<string, WorkspaceColor>>>({})
 
-  const tintService: WorkspaceColorTints = {
-    snapshot: () => tints.getSnapshot(),
-    subscribe: (listener) => {
-      // The first reader is what asks the Host for the stored tints: adding the
-      // plugin must not put a request on the wire by itself, and a composition
-      // that never renders a Workspace row issues none.
-      void loadOnce()
-      return tints.subscribe(listener)
-    },
-  }
-  ctx.effect(() => ctx.provide('workspaceColorTints', tintService), 'ui-workspace-color: tint service')
-
-  const publish = (workspaceId: string, color: string | undefined): void => {
-    const next: Record<string, string> = {}
-    for (const [id, tint] of Object.entries(tints.getSnapshot())) {
-      if (id !== workspaceId) next[id] = tint
-    }
-    if (color !== undefined) next[workspaceId] = color
+  /** Hand the whole map to ui-workspace's store; a composition without it still writes rows. */
+  const publish = (next: Readonly<Record<string, WorkspaceColor>>): void => {
     tints.set(next)
+    const sink = ctx.get('workspaceRowTints') as RowTintSink | undefined
+    sink?.set(toCss(next))
   }
+
+  // Read once at apply: the rows need their tints on their first render, and
+  // the composition's Remote answers this endpoint as a boot-time response.
+  void ctx.remote.workspaceColor.all().then((result) => {
+    if (result.ok) publish(result.value.colors)
+  })
 
   const injectFace = (): FolderColorInjected => ({
     setColor: async (workspaceId, color) => {
       const result = await ctx.remote.workspaceColor.set({ workspaceId, color })
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-      publish(workspaceId, color === 'default' ? undefined : color)
+      const next: Record<string, WorkspaceColor> = {}
+      for (const [id, tint] of Object.entries(tints.getSnapshot())) {
+        if (id !== workspaceId) next[id] = tint
+      }
+      if (color !== 'default') next[workspaceId] = color
+      publish(next)
     },
   })
 

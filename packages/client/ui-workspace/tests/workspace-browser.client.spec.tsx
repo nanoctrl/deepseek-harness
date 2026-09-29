@@ -3,6 +3,7 @@ import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -142,6 +143,20 @@ function rerender(b: ReturnType<typeof mount>, overrides: Partial<WorkspaceBrows
 }
 
 describe('WorkspaceBrowser', () => {
+  it('repaints a Workspace folder as soon as its tint arrives', () => {
+    const tints = createSnapshotStore<Readonly<Record<string, string>>>({})
+    const { view } = mount({
+      useWorkspaces: hook(workspaceState([workspace('alpha', [])])),
+      useRowTints: bindSnapshotSelector(tints),
+    })
+    expect(view.container.querySelector('[style*="--folder-tint"]')).toBeNull()
+
+    act(() => { tints.set({ alpha: 'var(--dsw-alias-workspace-tint-red)' }) })
+
+    expect(view.container.querySelector('[style*="--folder-tint"]')?.getAttribute('style'))
+      .toContain('--dsw-alias-workspace-tint-red')
+  })
+
   it.each(['workspace', 'flat', 'ungrouped'] as const)('keeps %s recency independent of arrival order and saved manual positions', (mode) => {
     localStorage.clear()
     const preferences = createWorkspaceViewStore().create()

@@ -15,7 +15,11 @@ import css from './FolderColorMenu.module.css'
 export type FolderColorMenuProps =
   PropsRuntime<'sidebar.workspaces.row.menu.item'> & FolderColorInjected & PropsLocale<'workspaceColor'>
 
-/** The folder-tint rows, legend first. */
+/**
+ * The folder-tint rows, legend first. The owner share carries the row's tint
+ * as the CSS color it paints, so the applied one is the row whose token
+ * matches it.
+ */
 export function FolderColorMenu(props: FolderColorMenuProps): ReactElement {
   const { workspaceId, color, setColor, t } = props
   return (
@@ -26,7 +30,7 @@ export function FolderColorMenu(props: FolderColorMenuProps): ReactElement {
           key={tint}
           icon={(
             <span
-              className={clsx(css.swatch, tint === color && css.swatchCurrent)}
+              className={clsx(css.swatch, TINT_TOKEN[tint] === color && css.swatchCurrent)}
               style={{ '--tint': TINT_TOKEN[tint] } as CSSProperties}
             />
           )}
@@ -35,7 +39,7 @@ export function FolderColorMenu(props: FolderColorMenuProps): ReactElement {
         >
           {/* The applied tint reads bold too, so the menu states the choice in
               text and not only through the ring around its swatch. */}
-          <span className={clsx(tint === color && css.labelCurrent)}>{t(TINT_LABEL[tint])}</span>
+          <span className={clsx(TINT_TOKEN[tint] === color && css.labelCurrent)}>{t(TINT_LABEL[tint])}</span>
         </MenuItemButton>
       ))}
     </>

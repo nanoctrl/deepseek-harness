@@ -9,7 +9,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
+import type { WorkspaceColor } from '@deepseek-ai/dsh-host-workspace-color'
 import { FolderColorMenu, type FolderColorMenuProps } from '../src/client/FolderColorMenu.tsx'
+import { TINT_TOKEN } from '../src/client/colors.ts'
 // Type-only: pulls this plugin's LocaleNamespaceMap entry, which types the seat.
 import type {} from '../src/client/index.ts'
 import { en } from '../src/client/locales.ts'
@@ -36,14 +38,17 @@ const seats: GlobalStandardProps = {
   useResource: () => ({ status: 'none', value: undefined, failure: undefined, reload: () => {} }),
 }
 
-/** Render the rows with the owner share the browser hands the entry. */
-function mount(current: string | undefined): ReturnType<typeof vi.fn> {
+/**
+ * Render the rows with the owner share the browser hands the entry. The owner
+ * carries the tint as the CSS color the row paints, so the fixture converts.
+ */
+function mount(current: WorkspaceColor | undefined): ReturnType<typeof vi.fn> {
   const setColor = vi.fn(async () => {})
   const props: FolderColorMenuProps = {
     ...seats,
     workspaceId: wid('w1'),
     title: 'Project',
-    color: current,
+    color: current === undefined ? undefined : TINT_TOKEN[current],
     setColor,
     t,
   }
@@ -80,10 +85,11 @@ describe('FolderColorMenu', () => {
     expect(bold.map(row => row.textContent)).toEqual(['Green'])
   })
 
-  it('rings nothing when the workspace carries no tint', () => {
+  it('marks Default while the workspace carries no tint', () => {
     mount(undefined)
-    expect(screen.getAllByRole('menuitem').filter(row => row.querySelector('[class*="swatchCurrent"]') !== null))
-      .toEqual([])
+    const marked = screen.getAllByRole('menuitem')
+      .filter(row => row.querySelector('[class*="swatchCurrent"]') !== null)
+    expect(marked.map(row => row.textContent)).toEqual(['Default'])
   })
 
   it('writes the picked tint for this workspace', () => {
