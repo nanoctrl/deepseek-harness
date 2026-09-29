@@ -51,6 +51,19 @@ describe('WorkspaceColorGateway', () => {
     expect(await restarted.gateway.all()).toEqual({ colors: { w1: 'teal', w2: 'brown' } })
   })
 
+  it('ignores a tint this build no longer knows instead of failing the domain', async () => {
+    const h = await harness()
+    await h.gateway.set({ workspaceId: 'w1', color: 'teal' })
+    // A tint a previous palette wrote: the schema stores bare strings, so the
+    // row stays readable and only the reader decides what it knows.
+    h.pool.media.get('workspace_color')?.tables.get('colors')?.set('w2', 'fuchsia')
+
+    expect(await h.gateway.all()).toEqual({ colors: { w1: 'teal' } })
+    // The obsolete row does not block further writes.
+    await h.gateway.set({ workspaceId: 'w3', color: 'indigo' })
+    expect(await h.gateway.all()).toEqual({ colors: { w1: 'teal', w3: 'indigo' } })
+  })
+
   it('clears the row when the tint returns to default', async () => {
     const h = await harness()
     await h.gateway.set({ workspaceId: 'w1', color: 'green' })

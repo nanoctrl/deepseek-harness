@@ -11,31 +11,36 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
-import { WORKSPACE_COLORS, workspaceColorDomainSpec } from './spec.ts'
+import { isWorkspaceColor, workspaceColorDomainSpec } from './spec.ts'
 import type {
   SetWorkspaceColorInput, SetWorkspaceColorResult, WorkspaceColor, WorkspaceColorMap,
 } from './types.ts'
 
 export type * from './types.ts'
+export { WORKSPACE_COLORS, isWorkspaceColor } from './spec.ts'
 
 /** Remote-only gateway exposing the durable per-workspace folder tint. */
 export default class WorkspaceColorGateway extends TypertRemoteService {
   static inject = ['storageDomain']
 
-  private table?: Promise<KvTable<string, WorkspaceColor>>
+  private table?: Promise<KvTable<string, string>>
 
   constructor(ctx: Context) {
     super(ctx, 'workspaceColor')
   }
 
   /**
-   * Read every stored tint.
-   * @returns tints by Workspace id; untinted workspaces are absent.
+   * Read every tint this build still knows.
+   * @returns tints by Workspace id; untinted and obsolete rows are absent.
    */
   @Remote('all')
   async all(): Promise<WorkspaceColorMap> {
     const colors: Record<string, WorkspaceColor> = {}
-    for (const [workspaceId, color] of (await this.requireTable()).entries()) colors[workspaceId] = color
+    for (const [workspaceId, stored] of (await this.requireTable()).entries()) {
+      // A tint a later build dropped stays in the medium untouched and is
+      // simply not reported: changing the palette must not lose color choices.
+      if (isWorkspaceColor(stored)) colors[workspaceId] = stored
+    }
     return { colors }
   }
 
@@ -51,8 +56,10 @@ export default class WorkspaceColorGateway extends TypertRemoteService {
     if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
       throw new TypeError('workspaceColor.set requires a non-empty workspaceId')
     }
-    if (!WORKSPACE_COLORS.includes(color)) {
-      throw new TypeError(`workspaceColor.set received an unknown color '${color}'`)
+    // The wire carries a bare string: the declared member set is what a
+    // typed caller sends, not what an untyped one may.
+    if (!isWorkspaceColor(color)) {
+      throw new TypeError(`workspaceColor.set received an unknown color '${String(color)}'`)
     }
     const table = await this.requireTable()
     if (color === 'default') await table.delete(workspaceId)
@@ -64,12 +71,12 @@ export default class WorkspaceColorGateway extends TypertRemoteService {
    * Open the tint domain once; concurrent first calls share the same open.
    * @returns the tint table.
    */
-  private requireTable(): Promise<KvTable<string, WorkspaceColor>> {
+  private requireTable(): Promise<KvTable<string, string>> {
     this.table ??= this.openTable()
     return this.table
   }
 
-  private async openTable(): Promise<KvTable<string, WorkspaceColor>> {
+  private async openTable(): Promise<KvTable<string, string>> {
     const domain = await this.ctx.storageDomain.open(workspaceColorDomainSpec)
     this.ctx.effect(() => () => domain.close(), 'workspaceColor.domainClose')
     return domain.table('colors')
