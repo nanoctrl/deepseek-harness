@@ -115,7 +115,7 @@ function downloadIcon(): ReactElement {
 
 /** Stop every track and disconnect/close the analyser graph. */
 function stopStreamAndAudio(h: RecorderHolder): void {
-  if (h.stream) h.stream.getTracks().forEach((t) => { try { t.stop() } catch { /* already stopped */ } })
+  h.stream.getTracks().forEach((t) => { try { t.stop() } catch { /* already stopped */ } })
   try { h.src?.disconnect() } catch { /* noop */ }
   try { h.analyser?.disconnect() } catch { /* noop */ }
   try { if (h.AC && h.AC.state !== 'closed') void h.AC.close() } catch { /* noop */ }
@@ -123,7 +123,7 @@ function stopStreamAndAudio(h: RecorderHolder): void {
 
 /** The composer mic button plus the centered recording/transcription overlay. */
 export function VoiceButton(props: VoiceButtonProps): ReactElement {
-  const { transcribe, insert, sessionId, t } = props
+  const { sessionId, t } = props
   const [status, setStatus] = useState<Status>('idle')
   const [err, setErr] = useState('')
   const holderRef = useRef<RecorderHolder | null>(null)
@@ -158,7 +158,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
   }
 
   async function start(): Promise<void> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    if (typeof navigator === 'undefined' || typeof MediaRecorder === 'undefined') {
       fail(t('mic.unsupported'))
       return
     }
@@ -176,21 +176,19 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     }
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
     const chunks: Blob[] = []
-    rec.ondataavailable = (e) => { if (e && e.data && e.data.size > 0) chunks.push(e.data) }
-    rec.onerror = () => fail(t('mic.recordFailed'))
+    rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
+    rec.onerror = () => { fail(t('mic.recordFailed')) }
 
     let AC: AudioContext | null = null
     let src: MediaStreamAudioSourceNode | null = null
     let analyser: AnalyserNode | null = null
     try {
-      const ACtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      if (ACtor && typeof ACtor === 'function') {
-        AC = new ACtor()
-        src = AC.createMediaStreamSource(stream)
-        analyser = AC.createAnalyser()
-        analyser.fftSize = 512
-        src.connect(analyser)
-      }
+      const ACtor = window.AudioContext
+      AC = new ACtor()
+      src = AC.createMediaStreamSource(stream)
+      analyser = AC.createAnalyser()
+      analyser.fftSize = 512
+      src.connect(analyser)
     } catch { AC = null; src = null; analyser = null }
 
     holderRef.current = { rec, chunks, stream, mime, AC, src, analyser, recordStart: Date.now(), durationMs: 0, rafId: 0 }
@@ -213,8 +211,8 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
   function finalize(h: RecorderHolder): void {
     let blob: Blob | null = null
     try {
-      const mime = (h.rec && h.rec.mimeType) || h.mime || 'audio/webm'
-      if (h.chunks && h.chunks.length) blob = new Blob(h.chunks, { type: mime })
+      const mime = h.rec.mimeType || h.mime || 'audio/webm'
+      if (h.chunks.length > 0) blob = new Blob(h.chunks, { type: mime })
     } catch { fail(t('mic.blobFailed')); return }
     if (!blob) { fail(t('mic.empty')); return }
     lastRecordingRef.current = { blob, durationMs: h.durationMs }
@@ -226,8 +224,8 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const fr = new FileReader()
-        fr.onload = () => resolve(String(fr.result))
-        fr.onerror = () => reject(fr.error)
+        fr.onload = () => { resolve(fr.result as string) }
+        fr.onerror = () => { reject(fr.error ?? new Error('audio read failed')) }
         fr.readAsDataURL(blob)
       })
       b64 = dataUrl.split(',')[1] || ''
@@ -237,17 +235,17 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const ext = (blob.type && blob.type.indexOf('mp4') !== -1) ? 'm4a' : 'webm'
     let res: TranscribeResult
     try {
-      res = await transcribe({ b64, ext, durationMs })
+      res = await props.transcribe({ b64, ext, durationMs })
     } catch (e) { fail(t('mic.connection') + ': ' + (e instanceof Error ? e.message : String(e))); return }
 
-    if (res && res.ok && res.text) {
+    if (res.ok && res.text) {
       const text = res.text.trim()
       const target = sessionRef.current
       // El destino es la sesión donde se grabó, no la que el usuario esté
       // mirando ahora. Si su compositor ya no existe, el audio no se pierde:
       // queda guardado y el usuario lo puede reintentar o descargar.
       if (!text) { lastRecordingRef.current = null; setStatus('idle'); setErr(''); return }
-      if (target === null || !insert(target, text)) {
+      if (target === null || !props.insert(target, text)) {
         fail(t('mic.insertFailed'))
         return
       }
@@ -256,7 +254,7 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
       setStatus('idle')
       setErr('')
     } else {
-      fail((res && res.error) || t('mic.transcribeFailed'))
+      fail(res.error || t('mic.transcribeFailed'))
     }
   }
 
@@ -276,11 +274,11 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const url = URL.createObjectURL(saved.blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'dictado-' + Date.now() + '.' + ext
+    a.download = `dictado-${String(Date.now())}.${ext}`
     document.body.appendChild(a)
     a.click()
     a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 10000)
+    setTimeout(() => { URL.revokeObjectURL(url) }, 10000)
   }
 
   function onClick(): void {
@@ -364,17 +362,17 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
       prevHi = hi
       const scale = 1 + level * 0.85
       const spread = Math.round(level * 45)
-      node.style.transform = 'scale(' + scale.toFixed(3) + ')'
+      node.style.transform = `scale(${scale.toFixed(3)})`
       node.style.boxShadow =
-        '0 0 ' + spread + 'px hsl(' + Math.round(phase) + ',100%,62%)' + ',' +
-        '0 0 ' + (spread + 10) + 'px hsl(' + Math.round((phase + 80) % 360) + ',100%,60%)' + ',' +
-        '0 0 ' + (spread + 20) + 'px hsl(' + Math.round((phase + 160) % 360) + ',100%,58%)' + ',' +
-        '0 0 ' + (spread + 30) + 'px hsl(' + Math.round((phase + 240) % 360) + ',100%,55%)'
+        `0 0 ${String(spread)}px hsl(${String(Math.round(phase))},100%,62%),` +
+        `0 0 ${String(spread + 10)}px hsl(${String(Math.round((phase + 80) % 360))},100%,60%),` +
+        `0 0 ${String(spread + 20)}px hsl(${String(Math.round((phase + 160) % 360))},100%,58%),` +
+        `0 0 ${String(spread + 30)}px hsl(${String(Math.round((phase + 240) % 360))},100%,55%)`
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     h.rafId = raf
-    return () => cancelAnimationFrame(h.rafId)
+    return () => { cancelAnimationFrame(h.rafId) }
   }, [status])
 
   // Estimated 0→99% progress while transcribing.
@@ -388,11 +386,11 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
     const tick = (): void => {
       const elapsed = Date.now() - meta.start
       const pct = Math.min(99, Math.round(elapsed / est * 100))
-      pctEl.textContent = pct + '%'
+      pctEl.textContent = `${String(pct)}%`
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
+    return () => { cancelAnimationFrame(raf) }
   }, [status])
 
   // Global keyboard: Ctrl+M toggles recording; Enter stops / Escape cancels.
@@ -410,14 +408,16 @@ export function VoiceButton(props: VoiceButtonProps): ReactElement {
       }
     }
     window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
+    return () => { window.removeEventListener('keydown', onKey, true) }
   }, [status])
 
   const hidden = status === 'recording' || status === 'transcribing'
-  const cls = css.btn
-    + (status === 'recording' ? ' ' + css.recording : '')
-    + (status === 'error' ? ' ' + css.error : '')
-    + (hidden ? ' ' + css.hidden : '')
+  const cls = [
+    css.btn ?? '',
+    status === 'recording' ? css.recording ?? '' : '',
+    status === 'error' ? css.error ?? '' : '',
+    hidden ? css.hidden ?? '' : '',
+  ].filter(part => part !== '').join(' ')
   const title = status === 'recording'
     ? t('mic.titleRecording')
     : status === 'transcribing'

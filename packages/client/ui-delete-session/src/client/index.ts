@@ -1,4 +1,4 @@
-/** Registers the session-row delete action into ui-workspace's `sidebar.workspaces.sessionAction` hole. */
+/** Registers the session-row delete action into ui-workspace's `sidebar.workspaces.session.menu.item` list. */
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the api-remotes Context merge (ctx.remote and the
 // deleteSession namespace contributed by the host delete-session Remote).
@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-// Type-only: pulls ui-workspace's SlotMap merge (the sessionAction entry).
+// Type-only: pulls ui-workspace's SlotMap merge (the session menu entry).
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { SessionActionInjected } from './contract/slots.ts'
 import { DeleteSessionItem } from './DeleteSessionItem.tsx'
@@ -30,7 +30,7 @@ const NS = 'deleteSession'
 export const inject = ['slots', 'locale', 'remote', 'remote.deleteSession']
 
 /**
- * Register the delete row once ui-workspace's `sidebar.workspaces.sessionAction`
+ * Register the delete row once ui-workspace's `sidebar.workspaces.session.menu.item`
  * declaration is live.
  * @param ctx - Client root context.
  */
@@ -38,7 +38,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-delete-session: dictionaries')
 
   const injectFace = (): SessionActionInjected => ({
-    delete: async (sessionId) => {
+    deleteSession: async (sessionId) => {
       const result = await ctx.remote.deleteSession.delete({ sessionId })
       if (!result.ok) {
         throw new Error(`${result.error.code}: ${result.error.message}`)
@@ -46,9 +46,10 @@ export function apply(ctx: Context): void {
     },
   })
 
-  ctx.slots.inject('sidebar.workspaces.sessionAction', () => ctx.slots.register({
-    name: 'sidebar.workspaces.sessionAction',
+  ctx.slots.inject('sidebar.workspaces.session.menu.item', () => ctx.slots.register({
+    name: 'sidebar.workspaces.session.menu.item',
     id: 'delete-session',
+    order: 500,
     locale: NS,
     inject: injectFace,
   }, DeleteSessionItem))

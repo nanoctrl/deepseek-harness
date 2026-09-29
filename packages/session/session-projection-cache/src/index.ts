@@ -391,7 +391,7 @@ export class SessionProjectionCache extends Service {
    * log itself is untouched — deletion of artifacts is the caller's concern.
    */
   remove(id: SessionId): void {
-    this.requireTable().delete(id)
+    void this.requireTable().delete(id)
     for (const [session, state] of this.dirty) {
       if (session.id === id) {
         if (state.timer !== undefined) clearTimeout(state.timer)

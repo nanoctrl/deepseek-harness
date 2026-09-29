@@ -145,9 +145,9 @@ function serverReady(sock: string): Promise<boolean> {
       probe.end()
     })
     probe.on('data', () => {}) // drain the reply so the socket closes cleanly
-    probe.once('error', () => finish(false))
-    probe.once('close', () => finish(true))
-    const timer = setTimeout(() => finish(false), 5000)
+    probe.once('error', () => { finish(false) })
+    probe.once('close', () => { finish(true) })
+    const timer = setTimeout(() => { finish(false) }, 5000)
     timer.unref()
   })
 }
@@ -163,7 +163,7 @@ function transcribeFile(root: string, model: string, language: string, tmpPath: 
     const script = join(root, 'transcribe.py')
     let stderrBuf = ''
     const child = execFile(py, [script, tmpPath, model, language], { timeout: timeoutMs, encoding: 'utf8' }, (err, stdout) => {
-      if (err) { reject(err); return }
+      if (err) { reject(err instanceof Error ? err : new Error('transcribe failed')); return }
       const text = (stdout || '').trim()
       if (text) { resolve(text); return }
       const hint = cleanErr(stderrBuf)
@@ -364,9 +364,9 @@ export class VoiceDictationGateway extends TypertRemoteService {
   @Remote('transcribe')
   async transcribe(payload: TranscribePayload): Promise<TranscribeResult> {
     try {
-      const b64 = payload && typeof payload.b64 === 'string' ? payload.b64 : ''
+      const b64 = typeof payload.b64 === 'string' ? payload.b64 : ''
       if (!b64) return { ok: false, error: 'Audio vacío' }
-      const ext = (payload?.ext || 'webm').replace(/[^a-z0-9]/gi, '') || 'webm'
+      const ext = (payload.ext || 'webm').replace(/[^a-z0-9]/gi, '') || 'webm'
       const root = this.config.voiceRoot ?? DEFAULT_VOICE_ROOT
       const model = this.config.model ?? DEFAULT_MODEL
       const language = this.config.language ?? 'auto'

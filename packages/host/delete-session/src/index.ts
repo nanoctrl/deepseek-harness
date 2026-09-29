@@ -12,9 +12,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import type { SessionProjectionCache } from '@deepseek-ai/dsh-session-projection-cache'
-import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
+// Type-only: pulls each service's Context merge so ctx.get resolves typed.
+import type {} from '@deepseek-ai/dsh-session-persistence'
+import type {} from '@deepseek-ai/dsh-session-projection-cache'
+import type {} from '@deepseek-ai/dsh-workspace'
 import type { DeleteSessionInput, DeleteSessionResult } from './types.ts'
 
 export type * from './types.ts'
@@ -64,7 +65,7 @@ export class DeleteSessionGateway extends TypertRemoteService {
     if (agents?.get(id)?.status === 'running') throw new DeleteSessionLiveError(sessionId)
 
     // 2. Ground truth: the session must exist in persistence.
-    const persistence = this.ctx.get('sessionPersistence') as SessionPersistence | undefined
+    const persistence = this.ctx.get('sessionPersistence')
     if (persistence === undefined) {
       throw new Error('session persistence is unavailable')
     }
@@ -72,12 +73,12 @@ export class DeleteSessionGateway extends TypertRemoteService {
     if (!known) throw new DeleteSessionUnknownError(sessionId)
 
     // 3. Forget registry accounting first (workspace accounts + archive set).
-    const registry = this.ctx.get('workspaceRegistry') as WorkspaceRegistry | undefined
+    const registry = this.ctx.get('workspaceRegistry')
     if (registry !== undefined) await registry.removeSession(id)
 
     // 4. Drop cached projections (fail-soft: a stale row is harmless and
     //    self-heals; removal must not abort the deletion).
-    const cache = this.ctx.get('sessionProjectionCache') as SessionProjectionCache | undefined
+    const cache = this.ctx.get('sessionProjectionCache')
     cache?.remove(id)
 
     // 5. Remove persisted artifacts last: after registry accounting is gone,
