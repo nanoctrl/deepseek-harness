@@ -73,6 +73,13 @@ describe('FolderColorMenu', () => {
     expect(marked.map(row => row.textContent)).toEqual(['Green'])
   })
 
+  it('sets the applied tint name in bold, and only that one', () => {
+    mount('green')
+    const bold = screen.getAllByRole('menuitem')
+      .filter(row => row.querySelector('[class*="labelCurrent"]') !== null)
+    expect(bold.map(row => row.textContent)).toEqual(['Green'])
+  })
+
   it('rings nothing when the workspace carries no tint', () => {
     mount(undefined)
     expect(screen.getAllByRole('menuitem').filter(row => row.querySelector('[class*="swatchCurrent"]') !== null))

@@ -1,7 +1,7 @@
 /**
  * The workspace row menu's folder-tint rows: one swatch row per tint, the
- * current one ringed. Rendered from `sidebar.workspaces.row.menu.item`, so the
- * rows join the menu's keyboard walk and focus return like any other row.
+ * current one ringed and bold. Rendered from `sidebar.workspaces.row.menu.item`,
+ * so the rows join the menu's keyboard walk and focus return like any other row.
  */
 import type { CSSProperties, ReactElement } from 'react'
 import clsx from 'clsx'
@@ -33,7 +33,9 @@ export function FolderColorMenu(props: FolderColorMenuProps): ReactElement {
           separatorBefore={index === 0}
           onSelect={() => { void setColor(workspaceId, tint) }}
         >
-          {t(TINT_LABEL[tint])}
+          {/* The applied tint reads bold too, so the menu states the choice in
+              text and not only through the ring around its swatch. */}
+          <span className={clsx(tint === color && css.labelCurrent)}>{t(TINT_LABEL[tint])}</span>
         </MenuItemButton>
       ))}
     </>

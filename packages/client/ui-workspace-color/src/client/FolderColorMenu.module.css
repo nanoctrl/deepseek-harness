@@ -18,3 +18,8 @@
 .swatchCurrent {
   box-shadow: 0 0 0 2px var(--dsw-alias-label-primary);
 }
+
+/* Its name reads bold as well, so the applied tint is legible without color. */
+.labelCurrent {
+  font-weight: 600;
+}
