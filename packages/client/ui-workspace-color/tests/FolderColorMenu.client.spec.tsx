@@ -42,8 +42,10 @@ const seats: GlobalStandardProps = {
  * Render the rows with the owner share the browser hands the entry. The owner
  * carries the tint as the CSS color the row paints, so the fixture converts.
  */
-function mount(current: WorkspaceColor | undefined): ReturnType<typeof vi.fn> {
-  const setColor = vi.fn(async () => {})
+function mount(
+  current: WorkspaceColor | undefined,
+  setColor: FolderColorMenuProps['setColor'] = vi.fn(async () => {}),
+): ReturnType<typeof vi.fn> {
   const props: FolderColorMenuProps = {
     ...seats,
     workspaceId: wid('w1'),
@@ -53,7 +55,7 @@ function mount(current: WorkspaceColor | undefined): ReturnType<typeof vi.fn> {
     t,
   }
   render(<FolderColorMenu {...props} />)
-  return setColor
+  return props.setColor as ReturnType<typeof vi.fn>
 }
 
 const labels = (): Array<string | null> => screen.getAllByRole('menuitem').map(row => row.textContent)
@@ -102,5 +104,14 @@ describe('FolderColorMenu', () => {
     const setColor = mount('blue')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Default' }))
     expect(setColor).toHaveBeenCalledWith('w1', 'default')
+  })
+
+  it('reports a refused write in place instead of looking untouched', async () => {
+    const refused = vi.fn(async () => { throw new Error('unknown color') })
+    mount('blue', refused)
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Teal' }))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('unknown color')
   })
 })

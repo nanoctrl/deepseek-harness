@@ -18,6 +18,7 @@ export const zh = {
   'color.deeporange': '深橙',
   'color.brown': '棕色',
   'color.bluegrey': '灰蓝',
+  'error.failed': '无法保存文件夹颜色',
 } satisfies Record<string, string>
 
 /** The workspace-color namespace key union. */
@@ -41,4 +42,5 @@ export const en = {
   'color.deeporange': 'Deep Orange',
   'color.brown': 'Brown',
   'color.bluegrey': 'Blue Grey',
+  'error.failed': 'Could not save the folder color',
 } satisfies Record<WorkspaceColorKey, string>

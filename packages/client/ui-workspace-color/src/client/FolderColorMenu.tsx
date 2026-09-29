@@ -2,7 +2,11 @@
  * The workspace row menu's folder-tint rows: one swatch row per tint, the
  * current one ringed and bold. Rendered from `sidebar.workspaces.row.menu.item`,
  * so the rows join the menu's keyboard walk and focus return like any other row.
+ *
+ * A refused write reports itself in place: the Host rejects a tint it does not
+ * know, and swallowing that would leave the row looking untouched.
  */
+import { useState } from 'react'
 import type { CSSProperties, ReactElement } from 'react'
 import clsx from 'clsx'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -22,6 +26,8 @@ export type FolderColorMenuProps =
  */
 export function FolderColorMenu(props: FolderColorMenuProps): ReactElement {
   const { workspaceId, color, setColor, t } = props
+  const [failure, setFailure] = useState<string | undefined>(undefined)
+
   return (
     <>
       <div className={css.legend} role="presentation">{t('menu.legend')}</div>
@@ -35,13 +41,21 @@ export function FolderColorMenu(props: FolderColorMenuProps): ReactElement {
             />
           )}
           separatorBefore={index === 0}
-          onSelect={() => { void setColor(workspaceId, tint) }}
+          onSelect={() => {
+            setFailure(undefined)
+            setColor(workspaceId, tint).catch((error: unknown) => {
+              setFailure(error instanceof Error ? error.message : String(error))
+            })
+          }}
         >
           {/* The applied tint reads bold too, so the menu states the choice in
               text and not only through the ring around its swatch. */}
           <span className={clsx(TINT_TOKEN[tint] === color && css.labelCurrent)}>{t(TINT_LABEL[tint])}</span>
         </MenuItemButton>
       ))}
+      {failure !== undefined && (
+        <div className={css.failure} role="alert">{t('error.failed')}: {failure}</div>
+      )}
     </>
   )
 }

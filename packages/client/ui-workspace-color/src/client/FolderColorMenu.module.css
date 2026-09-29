@@ -23,3 +23,9 @@
 .labelCurrent {
   font-weight: 600;
 }
+
+/* A refused write: the row would otherwise look untouched. */
+.failure {
+  padding: 4px 12px 6px;
+  color: var(--dsw-alias-state-error-primary);
+}
