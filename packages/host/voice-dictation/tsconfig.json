@@ -18,7 +18,7 @@
       "path": "../../typert/protocol"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../../vendor/schemastery"
     }
   ]
 }

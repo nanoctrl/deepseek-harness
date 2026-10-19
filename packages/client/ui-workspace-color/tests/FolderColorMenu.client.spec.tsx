@@ -36,6 +36,10 @@ const seats: GlobalStandardProps = {
   useSessionRetainInfo: () => undefined,
   usePanelInfo: hook({ activePanelId: null }),
   useResource: () => ({ status: 'none', value: undefined, failure: undefined, reload: () => {} }),
+  // These rows act on no governed resource, so every gate reads as allowed.
+  useRemoteAccess: () => true,
+  useSessionAccess: () => true,
+  useWorkspaceAccess: () => true,
 }
 
 /**
