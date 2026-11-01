@@ -65,6 +65,22 @@ set -euo pipefail
 cd /Users/nahuelmaeso/Desktop/claude-software/deepseek-harness
 git merge sync/upstream --no-edit            # ya resuelto: sin conflictos
 CI=true pnpm install --no-frozen-lockfile     # deps nuevas del upstream
+# limpieza de residuos de packages retirados (sección "Limpieza de residuos post-merge")
+find node_modules/.pnpm -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+for l in node_modules/.pnpm/node_modules/@*/* node_modules/.pnpm/node_modules/*; do
+  [ -L "$l" ] || continue
+  t=$(readlink "$l"); abs=$(cd "$(dirname "$l")" && cd "$t" 2>/dev/null && pwd) || abs=""
+  { [ -z "$abs" ] || [ ! -f "$abs/package.json" ]; } && rm -f "$l"
+done
+find packages -mindepth 2 -maxdepth 3 -type d \( -name node_modules -o -name lib -o -name src -o -name types -o -name tests -o -name scripts -o -name docs \) -prune -o -type d -print | while read d; do
+  if [ ! -f "$d/package.json" ] && { [ -d "$d/lib" ] || [ -d "$d/node_modules" ]; }; then rm -rf "$d"; fi
+done
+for f in apps/*/node_modules/.bin/*; do
+  [ -f "$f" ] || continue
+  for seg in $(grep -oE '\.pnpm/[^/ ]+' "$f" 2>/dev/null | sed 's|^\.pnpm/||' | sort -u); do
+    [ -e "node_modules/.pnpm/$seg" ] || rm -f "$f"
+  done
+done
 pnpm run build                                # reconstruye, incluido el runtime nuevo
 git push dsh-nanoctrl-fork master
 git worktree remove ../dsh-sync --force
@@ -92,6 +108,50 @@ git rev-list --count master..origin/master     # 0 = sincronizado
 ```
 
 Si el worker volvió a romperse (merge de un salto que reestructura paquetes), el server ya reinició con el código nuevo: el problema se resuelve solo.
+
+## El lanzador del Desktop (`.command`) también se actualiza
+
+Si usás el Desktop en vez del Web, el cierre controlado cambia de destinatario, y hay un archivo que el sync **no toca porque no vive en el repo**: el lanzador del escritorio.
+
+`~/Desktop/Abrir DSH Desktop.command` (wrapper de doble clic) y `~/Desktop/dsh-desktop.sh` (el script real) son archivos del usuario. Un sync del repo **no los actualiza**: si el comando de arranque, la ruta del checkout o los flags cambiaron entre versiones, el lanzador sigue ejecutando lo viejo y el Desktop arranca contra un build que ya no coincide con `HEAD`.
+
+Después del cierre, revisar y actualizar el lanzador:
+
+```sh
+# 1. el wrapper existe y es ejecutable
+ls -l ~/Desktop/"Abrir DSH Desktop.command" ~/Desktop/dsh-desktop.sh
+
+# 2. la ruta del repo dentro del script apunta al checkout real
+grep -n 'HARNESS=' ~/Desktop/dsh-desktop.sh
+
+# 3. el comando de arranque sigue existiendo en package.json
+node -p "require('./package.json').scripts['start:desktop']"
+
+# 4. los flags que el script exporta siguen siendo válidos
+grep -nE 'DSH_HOME|DSH_DESKTOP_OPEN_DEVTOOLS' ~/Desktop/dsh-desktop.sh
+```
+
+Qué actualizar cuando cambió:
+
+| Si cambió | Acción en el lanzador |
+|---|---|
+| El nombre del script de arranque (`start:desktop` → otro) | reemplazar el `pnpm run ...` |
+| La ruta del checkout | actualizar `HARNESS=` |
+| Un flag de entorno (ej. `DSH_DESKTOP_OPEN_DEVTOOLS`) | reflejar el default nuevo |
+| El mecanismo de cierre del Desktop | mantener el `pkill` + espera activa: Electron tarda en soltar 9229/9222/9230 |
+
+**Verificación de que corre la versión nueva** — no alcanza con que la ventana abra:
+
+```sh
+# el build que sirve el Desktop debe ser el HEAD del repo
+grep -o '"DSH_CLIENT_VERSION": "[^"]*"' .dsh-build/client-build-environment.json
+grep -o '"DSH_CLIENT_COMMIT_HASH": "[^"]*"' .dsh-build/client-build-environment.json
+git log -1 --format=%h
+```
+
+Los tres tienen que coincidir. Si el commit del build quedó atrás, el lanzador está arrancando un Desktop viejo (o nadie reconstruyó después del merge).
+
+**Cierre con el agente en el Desktop**: el script de la sección anterior termina con `launchctl kickstart` del Web, que no existe cuando no usás el Web. Usar el equivalente que reconstruye y **relanza el Desktop** (`~/.dsh/aplicar-sync-desktop.sh`: mismo merge/install/build/push, y al final `pkill -f "Harness Dev"` + espera + `pnpm run start:desktop`). El build mata el proceso que hospeda al agente, así que igual va en background.
 
 ## Por qué no es un "sync fork" de GitHub
 
@@ -218,6 +278,42 @@ Cuando el merge toque `packages/client/ui-workspace/` o `ui-theme`, revisar que 
 Si el merge reescribió `Rows.tsx` o `WorkspaceBrowser.tsx` y el slot desapareció, el síntoma es silencioso: el menú del workspace pierde la sección de color y el icono queda sin tinte, **sin error de compilación**. Los `grep` de arriba son la verificación.
 
 Si algo falla o un anclaje desapareció, corregirlo en el worktree antes de cerrar.
+
+## Limpieza de residuos post-merge (packages retirados)
+
+Un merge que **retira o renombra paquetes** deja residuos que `pnpm install` **no limpia por diseño** (ni `--force`): git borra los archivos trackeados del paquete (`package.json`, `src/`) pero conserva los untracked (`lib/`, `node_modules/`), y los symlinks del virtual-hoist (`node_modules/.pnpm/node_modules/`) quedan apuntando a lo que ya no existe. Los shims `.bin` de los `node_modules` de workspace tampoco se regeneran si el bin ya no pertenece al grafo.
+
+El ensamblador de desarrollo del Desktop (`apps/desktop/scripts/development-project.ts`) refleja con `readdirSync` **todo** lo que encuentra en el árbol, sin filtrar manifests válidos: un solo residuo basta para que `start:desktop` muera. Síntomas (caso real 2026-10-20, sync a 0.2.1-rc.2):
+
+- `Cannot find module .../node_modules/.pnpm/tsx@<ver-vieja>/...` — shim `.bin` stale en un `node_modules` de workspace (resuelve antes que el de la raíz).
+- `ENOENT ... stat '.../.pnpm/node_modules/<pkg>'` — symlink del virtual-hoist a un paquete inexistente.
+- `ENOENT ... open '.../.desktop-build/.../<pkg>/package.json'` — directorio huérfano enlazado sin manifest.
+
+Auditar (modo report, desde la raíz del repo):
+
+```sh
+# 1. symlinks rotos del virtual-hoist
+find node_modules/.pnpm -type l ! -exec test -e {} \; -print
+# 2. symlinks del hoist cuyo destino no tiene package.json
+for l in node_modules/.pnpm/node_modules/@*/* node_modules/.pnpm/node_modules/*; do
+  [ -L "$l" ] || continue
+  t=$(readlink "$l"); abs=$(cd "$(dirname "$l")" && cd "$t" 2>/dev/null && pwd) || abs=""
+  { [ -z "$abs" ] || [ ! -f "$abs/package.json" ]; } && echo "SIN MANIFEST: $(basename "$l") -> $t"
+done
+# 3. directorios huérfanos en packages/ (sin manifest, con build output)
+find packages -mindepth 2 -maxdepth 3 -type d \( -name node_modules -o -name lib -o -name src -o -name types -o -name tests -o -name scripts -o -name docs \) -prune -o -type d -print | while read d; do
+  if [ ! -f "$d/package.json" ] && { [ -d "$d/lib" ] || [ -d "$d/node_modules" ]; }; then echo "SIN MANIFEST: $d"; fi
+done
+# 4. shims .bin stale (referencian una versión que ya no está en .pnpm)
+for f in apps/*/node_modules/.bin/*; do
+  [ -f "$f" ] || continue
+  for seg in $(grep -oE '\.pnpm/[^/ ]+' "$f" 2>/dev/null | sed 's|^\.pnpm/||' | sort -u); do
+    [ -e "node_modules/.pnpm/$seg" ] || echo "STALE: $f -> .pnpm/$seg"
+  done
+done
+```
+
+Antes de borrar cada residuo, confirmar que el paquete está **retirado de verdad**: `git ls-files <path>` vacío (nada trackeado) y el nombre ausente de `pnpm-lock.yaml`. Con working tree limpio post-checkpoint, un directorio de `packages/` sin `package.json` trackeado **es** residuo. El script de cierre (abajo) ya incluye la limpieza automática.
 
 ## Push al fork
 

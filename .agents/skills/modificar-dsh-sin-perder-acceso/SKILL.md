@@ -150,6 +150,8 @@ Señales:
 - `crash-count` acercándose a **10** → riesgo de bootout automático: **parar** de disparar crashes.
 - Agente ausente de `launchctl print` → se booteó solo: usar el caso 2 de `dsh-health.sh`.
 
+**Desktop no arranca tras un sync** (`start:desktop` muere al instante con `exit 1`): revisar `/tmp/dsh-desktop.log`. Los errores `MODULE_NOT_FOUND` con versión vieja en el path, `ENOENT` sobre `package.json` del ensamblado o `ENOENT stat` de symlinks de `node_modules` son **drift de residuos** de packages retirados por el merge (shims `.bin` stale, symlinks rotos del virtual-hoist, directorios huérfanos en `packages/`). `pnpm install` no los limpia — ni `--force`. El procedimiento de auditoría y limpieza está en `sync-fork-upstream` > "Limpieza de residuos post-merge".
+
 ## Anti-patrones
 
 - ❌ Correr `pnpm run build` "para verificar" desde el agente. Es el error que se auto-sabotea.
@@ -160,5 +162,5 @@ Señales:
 
 ## Relación con otros skills
 
-- `sync-fork-upstream`: el sync de upstream (usa este protocolo para la fase de build).
+- `sync-fork-upstream`: el sync de upstream (usa este protocolo para la fase de build; incluye la limpieza de residuos post-merge).
 - `reiniciar-server-dsh`: procedimiento del reinicio del proceso y su verificación.
